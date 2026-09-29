@@ -24,6 +24,7 @@ class VoiceE2ETest(unittest.TestCase):
         from pipeline import DialoguePipeline
 
         cfg = load_config()
+        cfg["llm"]["backend"] = "rule"
         cfg["memory"]["db_path"] = os.path.join(tempfile.mkdtemp(), "m.db")
         cls.pipeline = DialoguePipeline(
             cfg, SERVICE_DIR, asr=create_asr(cfg, service_dir=SERVICE_DIR), vad=create_vad(cfg)

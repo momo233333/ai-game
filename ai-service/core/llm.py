@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -189,7 +190,7 @@ class LlamaCppBackend(LLMBackend):
             max_tokens=256,
         )
         text = out["choices"][0]["message"]["content"]
-        return sanitize_output(json.loads(extract_json(text)), ctx)
+        return sanitize_output(parse_llm_json(text), ctx)
 
 
 class OpenAICompatBackend(LLMBackend):
@@ -228,7 +229,7 @@ class OpenAICompatBackend(LLMBackend):
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         text = data["choices"][0]["message"]["content"]
-        return sanitize_output(json.loads(extract_json(text)), ctx)
+        return sanitize_output(parse_llm_json(text), ctx)
 
 
 def extract_json(text: str) -> str:
@@ -239,9 +240,50 @@ def extract_json(text: str) -> str:
     return text
 
 
+def parse_llm_json(text: str) -> dict[str, Any]:
+    """容错解析模型输出：只取第一个完整 JSON 对象，忽略前后多余文字。
+
+    模型常见的坏输出：JSON 后补一句话、补注释、直接给两个对象、
+    把 voicelib://xxx 写成无引号的裸值——extract_json 的 rfind
+    会把它们切成一片导致 json.loads 抛错。
+    """
+    start = text.find("{")
+    if start < 0:
+        raise ValueError(f"no json object in model output: {text[:80]!r}")
+    candidates = [text[start:]]
+    quoted = _quote_bare_values(text[start:])
+    if quoted != candidates[0]:
+        candidates.append(quoted)
+    end = text.rfind("}")
+    if end > start:
+        candidates.append(text[start : end + 1])
+    for cand in candidates:
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(cand)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+    raise ValueError(f"unparseable model output: {text[:120]!r}")
+
+
+_BARE_VALUE = re.compile(r':\s*(?!["\d\-{}\[\]]|true\b|false\b|null\b)([^\s,\}\]]+)')
+
+
+def _quote_bare_values(text: str) -> str:
+    return _BARE_VALUE.sub(lambda m: f': "{m.group(1)}"', text)
+
+
 def sanitize_output(raw: dict, ctx: dict) -> dict:
     action = raw.get("action") if isinstance(raw.get("action"), dict) else {}
-    reply = str(raw.get("reply") or "……")[: int(ctx.get("max_reply_chars", 40))]
+    tts_hint = raw.get("tts_hint")
+    reply_raw = str(raw.get("reply") or "……")
+    if reply_raw.startswith("voicelib://"):
+        tts_hint = tts_hint or reply_raw
+        corpus = ctx.get("corpus")
+        line = corpus.get(reply_raw[len("voicelib://") :]) if corpus is not None else None
+        reply_raw = line.text if line else "……"
+    reply = reply_raw[: int(ctx.get("max_reply_chars", 40))]
     try:
         trust_delta = int(float(raw.get("trust_delta", 0)))
     except (TypeError, ValueError):
@@ -256,7 +298,7 @@ def sanitize_output(raw: dict, ctx: dict) -> dict:
             "hold_ms": action.get("hold_ms", 600),
             "confidence": action.get("confidence", 0.5),
         },
-        tts_hint=raw.get("tts_hint"),
+        tts_hint=tts_hint,
         reply=reply,
         trust_delta=trust_delta,
     )

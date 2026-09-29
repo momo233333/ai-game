@@ -137,6 +137,7 @@ class DialogueCore:
             "game_state": state,
             "prompt": self.build_prompt(state),
             "max_reply_chars": self.max_reply_chars,
+            "corpus": self.corpus,
         }
         return self.backend.generate(ctx)
 
@@ -146,6 +147,7 @@ class DialogueCore:
             "game_state": state,
             "prompt": self.build_prompt(state),
             "max_reply_chars": self.max_reply_chars,
+            "corpus": self.corpus,
         }
         return self.backend.stream(ctx, chunk_chars=chunk_chars)
 

@@ -5,7 +5,15 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.corpus import Corpus
-from core.llm import LLMBackend, OpenAICompatBackend, RuleBasedBackend, create_backend, extract_json, sanitize_output
+from core.llm import (
+    LLMBackend,
+    OpenAICompatBackend,
+    RuleBasedBackend,
+    create_backend,
+    extract_json,
+    parse_llm_json,
+    sanitize_output,
+)
 from core.types import GameState, Intent
 
 SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +34,38 @@ class ExtractJsonTest(unittest.TestCase):
 
     def test_no_json(self):
         self.assertEqual(extract_json("hello"), "hello")
+
+
+class ParseLlmJsonTest(unittest.TestCase):
+    def test_plain(self):
+        self.assertEqual(parse_llm_json('{"reply":"好"}'), {"reply": "好"})
+
+    def test_trailing_comment_without_brace(self):
+        text = '{"action":{"intent":"BRAKE"},"reply":"好"} 以上是我的建议'
+        self.assertEqual(parse_llm_json(text)["reply"], "好")
+
+    def test_extra_object_after_reply(self):
+        text = '{"reply":"刹住"} 注意安全 }'
+        out = parse_llm_json(text)
+        self.assertEqual(out, {"reply": "刹住"})
+
+    def test_markdown_fence_then_chatter(self):
+        text = '```json\n{"reply":"左转","trust_delta":1}\n``` 好了就这些'
+        self.assertEqual(parse_llm_json(text)["trust_delta"], 1)
+
+    def test_no_json_raises(self):
+        with self.assertRaises(ValueError):
+            parse_llm_json("我只会说中文，不给 JSON")
+
+    def test_bare_voicelib_value(self):
+        text = '{"action":{"intent":"IGNORE","steering":0,"throttle":0,"brake":0,"hold_ms":600},"tts_hint":null,"reply":voicelib://L037,"trust_delta":-5}'
+        out = parse_llm_json(text)
+        self.assertEqual(out["reply"], "voicelib://L037")
+        self.assertEqual(out["trust_delta"], -5)
+
+    def test_quoted_values_left_alone(self):
+        out = parse_llm_json('{"reply":"没事","trust_delta":0}')
+        self.assertEqual(out["reply"], "没事")
 
 
 class SanitizeOutputTest(unittest.TestCase):
@@ -60,6 +100,26 @@ class SanitizeOutputTest(unittest.TestCase):
     def test_intent_uppercased(self):
         out = sanitize_output({"action": {"intent": "turn_left"}}, {})
         self.assertEqual(out["action"]["intent"], "TURN_LEFT")
+
+    def test_reply_voicelib_uri_promoted_to_hint(self):
+        class FakeCorpus:
+            def get(self, line_id):
+                if line_id == "L037":
+                    return type("Line", (), {"text": "这种事我不干，命要紧"})()
+                return None
+
+        out = sanitize_output(
+            {"reply": "voicelib://L037", "trust_delta": -5},
+            {"max_reply_chars": 40, "corpus": FakeCorpus()},
+        )
+        self.assertEqual(out["tts_hint"], "voicelib://L037")
+        self.assertEqual(out["reply"], "这种事我不干，命要紧")
+        self.assertNotIn("voicelib://", out["reply"])
+
+    def test_reply_voicelib_uri_unknown_id_falls_back(self):
+        out = sanitize_output({"reply": "voicelib://NOPE"}, {"max_reply_chars": 40, "corpus": None})
+        self.assertEqual(out["tts_hint"], "voicelib://NOPE")
+        self.assertEqual(out["reply"], "……")
 
 
 class StreamContractTest(unittest.TestCase):

@@ -33,7 +33,7 @@ AI_Game/
 │   ├── cli.py              # 命令行端到端原型（本地 / 远端 / --mic / --wav）
 │   ├── data/sensitive_words.txt
 │   ├── models/             # vosk 模型解压位置（模型需自行下载）
-│   └── tests/              # 195 项单元测试 + 44 项对话回归 + samples/ 语音样本
+│   └── tests/              # 208 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
 ├── voice-corpus/
 │   ├── lines.csv           # 台词语料（单一数据源：id/text/emotion/intent_tags/priority）
 │   └── manifest.json       # 语音库索引（voicelib_gen.py 生成）
@@ -48,24 +48,29 @@ cd AI_Game
 # 1) 生成语音库索引（CSV → manifest.json）
 python tools/voicelib_gen.py
 
-# 2) 单条指令端到端（本地管线）
+# 2) 启动真 LLM（可选，不启动则自动降级到规则引擎）
+& ai-service\models\llama\llama-server.exe `
+  -m ai-service\models\qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf `
+  --host 127.0.0.1 --port 8080 -ngl 99 -c 4096 --jinja
+
+# 3) 单条指令端到端（本地管线）
 cd ai-service
 python cli.py --text "前面路口左转"
 
-# 3) 交互模式
+# 4) 交互模式
 python cli.py
 你> 往左打方向
 你> /event collision        # Unity 侧本地事件：撞车 -12 信任
 你> /state
 你> /quit
 
-# 4) 起服务（JSON-TCP，50051）+ 远端客户端
+# 5) 起服务（JSON-TCP，50051）+ 远端客户端
 python server.py
 python cli.py --server 127.0.0.1:50051 --text "靠边停车"
 
-# 5) 测试
-python -m unittest discover -s tests      # 195 项单元测试
-python tests/run_dialogue_regression.py   # 44 项对话回归（方案 §6.2）
+# 6) 测试
+python -m unittest discover -s tests      # 208 项单元测试（llama-server 不在线时 4 项 skip）
+python tests/run_dialogue_regression.py   # 44 项对话回归（方案 §6.2，固定 rule 后端）
 
 # 6) 覆盖率（需 pip install coverage）
 python -m coverage run --source=core,pipeline,server,cli,config -m unittest discover -s tests
@@ -92,7 +97,7 @@ python cli.py --mic                       # 麦克风实时对话（说话→停
 
 | 环节 | 首选 | 降级 | 当前状态 |
 |------|------|------|---------|
-| LLM | llama.cpp (Qwen2.5 GGUF) | OpenAI 兼容 HTTP → **规则引擎** | rule（未装模型） |
+| LLM | llama.cpp (Qwen2.5 GGUF) | OpenAI 兼容 HTTP → **规则引擎** | **openai**（llama-server:8080，实测 108 tok/s） |
 | ASR | FunASR paraformer streaming | **Vosk 中文小模型** → 文本指令模式 | text（模型下载中） |
 | VAD | Silero VAD ONNX | 能量阈值 VAD | energy/none |
 | TTS | GPT-SoVITS 实时合成 | 预生成语音库 → 字幕静默 | voicelib |
