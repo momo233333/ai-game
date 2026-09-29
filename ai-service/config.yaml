@@ -1,0 +1,52 @@
+server:
+  host: 127.0.0.1
+  port: 50051
+  transport: auto            # auto | grpc | json
+  version: 0.1.0-skeleton
+
+llm:
+  backend: auto              # auto | llama_cpp | openai | rule
+  model_path: models/qwen2.5-7b-instruct-q4_k_m.gguf
+  n_ctx: 4096
+  n_gpu_layers: 99
+  openai_base_url: http://127.0.0.1:8080/v1
+  openai_model: qwen2.5-7b-instruct
+  max_reply_chars: 40
+  stream_chunk_chars: 4
+
+vad:
+  backend: auto              # auto | silero | energy
+  threshold: 0.5
+  min_silence_ms: 600
+  energy_threshold: 0.02
+
+asr:
+  backend: auto              # auto | funasr | vosk | none
+  model: paraformer-zh-streaming
+  vosk_model_path: models/vosk-model-small-cn-0.22
+  sample_rate: 16000
+  low_confidence: 0.6
+
+mic:
+  device: null               # null = 系统默认输入设备
+  block_ms: 100
+
+tts:
+  voicelib_enabled: true
+  realtime_enabled: true
+  voicelib_path: ../voice-corpus/manifest.json
+  sample_rate: 24000
+
+memory:
+  db_path: memory.db
+  save_slot: slot0
+  recent_turns: 8
+  old_debt_limit: 5
+  old_debt_threshold: -5
+  summarize_every: 5
+
+safety:
+  wordlist_path: data/sensitive_words.txt
+
+dialogue:
+  corpus_path: ../voice-corpus/lines.csv

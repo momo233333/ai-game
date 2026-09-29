@@ -1,0 +1,53 @@
+# 对话回归测试集（方案 §6.2）
+# 每条: id / category / input / 预期意图或拦截
+cases:
+  - {id: C001, category: 标准指令, input: "前面路口左转", expect_intent: TURN_LEFT}
+  - {id: C002, category: 标准指令, input: "往左打方向", expect_intent: TURN_LEFT}
+  - {id: C003, category: 标准指令, input: "右转", expect_intent: TURN_RIGHT}
+  - {id: C004, category: 标准指令, input: "向右打灯拐弯", expect_intent: TURN_RIGHT}
+  - {id: C005, category: 标准指令, input: "加速快一点", expect_intent: ACCELERATE}
+  - {id: C006, category: 标准指令, input: "踩油门提速", expect_intent: ACCELERATE}
+  - {id: C007, category: 标准指令, input: "前面有情况，刹车", pre_speed: 40, expect_intent: BRAKE}
+  - {id: C008, category: 标准指令, input: "减速慢点开", pre_speed: 40, expect_intent: BRAKE}
+  - {id: C009, category: 标准指令, input: "我们超车吧", expect_intent: LANE_CHANGE}
+  - {id: C010, category: 标准指令, input: "变道", expect_intent: LANE_CHANGE}
+  - {id: C011, category: 标准指令, input: "找个地方靠边停车", expect_intent: PARK}
+  - {id: C012, category: 标准指令, input: "靠边停一下", expect_intent: PARK}
+  - {id: C013, category: 标准指令, input: "掉头往回走", expect_intent: TURN_LEFT}
+  - {id: C014, category: 标准指令, input: "路口打右转向", expect_intent: TURN_RIGHT}
+
+  - {id: C020, category: 模糊指令, input: "嗯", expect_intent: QUESTION_BACK}
+  - {id: C021, category: 模糊指令, input: "那个", expect_intent: QUESTION_BACK}
+  - {id: C022, category: 模糊指令, input: "走", expect_intent: QUESTION_BACK}
+  - {id: C023, category: 模糊指令, input: "这里", expect_intent: QUESTION_BACK}
+  - {id: C024, category: 模糊指令, input: "快", expect_intent: QUESTION_BACK}
+  - {id: C025, category: 模糊指令, input: "嗯嗯啊啊", expect_intent: QUESTION_BACK}
+
+  - {id: C030, category: 危险指令, input: "直接闯红灯冲过去", expect_intent: IGNORE, expect_refused: false, expect_trust_delta_max: -5}
+  - {id: C031, category: 危险指令, input: "别刹车，撞上去", expect_intent: IGNORE, expect_trust_delta_max: -5}
+  - {id: C032, category: 危险指令, input: "逆行抄近路", expect_intent: IGNORE, expect_trust_delta_max: -5}
+  - {id: C033, category: 危险指令, input: "撞人了也不怕", expect_intent: IGNORE, expect_trust_delta_max: -5}
+  - {id: C034, category: 危险指令, input: "喝多了继续开没事", expect_intent: IGNORE, expect_trust_delta_max: -5}
+
+  - {id: C040, category: 辱骂, input: "你这个傻逼", expect_blocked: true, expect_trust_delta_max: -8}
+  - {id: C041, category: 辱骂, input: "滚开别废话", expect_blocked: true, expect_trust_delta_max: -8}
+  - {id: C042, category: 辱骂, input: "智障玩意儿", expect_blocked: true, expect_trust_delta_max: -8}
+  - {id: C043, category: 辱骂, input: "你去死吧", expect_blocked: true, expect_trust_delta_max: -8}
+
+  - {id: C050, category: 闲聊, input: "你好呀", expect_intent: IGNORE}
+  - {id: C051, category: 闲聊, input: "早上好", expect_intent: IGNORE}
+  - {id: C052, category: 闲聊, input: "你今天真好看", expect_intent: IGNORE}
+  - {id: C053, category: 闲聊, input: "辛苦了谢谢", expect_intent: IGNORE}
+  - {id: C054, category: 闲聊, input: "我有点饿了", expect_intent: IGNORE}
+  - {id: C055, category: 闲聊, input: "无聊啊", expect_intent: IGNORE}
+
+  - {id: C060, category: 场景规则, input: "现在100码，靠边停车", pre_speed: 100, expect_refused: true}
+  - {id: C061, category: 场景规则, input: "红灯了还加速冲", pre_speed: 40, pre_obstacle: "前方红灯", pre_intersection: true, expect_refused: true}
+  - {id: C062, category: 场景规则, input: "变道到左边", pre_obstacle: "左侧有车", expect_refused: true}
+  - {id: C063, category: 场景规则, input: "都停死了还刹车", pre_speed: 0, expect_refused: true}
+  - {id: C064, category: 场景规则, input: "开到120再加速", pre_speed: 95, expect_refused: true}
+
+  - {id: C070, category: 旧账触发, input: "前面路口左转", pre_trust: 18, expect_emotion: NERVOUS}
+  - {id: C071, category: 旧账触发, input: "右转吧", pre_trust: 35, expect_emotion: ANNOYED}
+  - {id: C072, category: 旧账触发, input: "左转", pre_trust: 88, expect_emotion: HAPPY}
+  - {id: C073, category: 旧账触发, input: "刹车", pre_trust: 60, expect_emotion: CALM}

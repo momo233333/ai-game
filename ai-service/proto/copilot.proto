@@ -1,0 +1,80 @@
+syntax = "proto3";
+package copilot;
+
+service AIService {
+  rpc VoiceTurn(stream AudioChunk) returns (stream TurnEvent);
+  rpc SyncGameState(GameState) returns (Ack);
+  rpc Ping(Empty) returns (Health);
+}
+
+message AudioChunk {
+  bytes pcm16 = 1;
+  int64 seq = 2;
+  bool end_of_stream = 3;
+}
+
+message GameState {
+  float trust = 1;
+  Emotion emotion = 2;
+  SceneContext scene = 3;
+  VehicleTelemetry telemetry = 4;
+  string level_id = 5;
+}
+
+enum Emotion { CALM = 0; ANNOYED = 1; NERVOUS = 2; HAPPY = 3; }
+
+message SceneContext {
+  string scene_id = 1;
+  string weather = 2;
+  string time_of_day = 3;
+}
+
+message VehicleTelemetry {
+  float speed_kmh = 1;
+  int32 gear = 2;
+  bool at_intersection = 3;
+  string obstacle_summary = 4;
+}
+
+message TurnEvent {
+  oneof payload {
+    AsrPartial asr_partial = 1;
+    AsrFinal asr_final = 2;
+    LlmDelta llm_delta = 3;
+    TtsAudio tts_audio = 4;
+    DriveAction drive_action = 5;
+    StateDelta state_delta = 6;
+    ErrorEvent error = 7;
+  }
+}
+
+message AsrPartial { string text = 1; float confidence = 2; }
+message AsrFinal { string text = 1; float confidence = 2; bool low_confidence = 3; }
+message LlmDelta { string text = 1; }
+message StateDelta { float trust = 1; Emotion emotion = 2; float trust_delta = 3; }
+message ErrorEvent { string code = 1; string message = 2; }
+
+message DriveAction {
+  float steering = 1;
+  float throttle = 2;
+  float brake = 3;
+  int32 hold_ms = 4;
+  string intent = 5;
+  float confidence = 6;
+}
+
+message TtsAudio {
+  bytes pcm16 = 1;
+  bool from_voicelib = 2;
+  string text = 3;
+}
+
+message Empty {}
+message Ack { bool ok = 1; }
+message Health {
+  bool ok = 1;
+  string llm_backend = 2;
+  string asr_backend = 3;
+  string tts_backend = 4;
+  string version = 5;
+}

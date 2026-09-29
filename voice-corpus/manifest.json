@@ -1,0 +1,708 @@
+{
+  "version": 1,
+  "generated_at": "2026-09-27T19:02:06",
+  "source_csv": "voice-corpus\\lines.csv",
+  "sample_rate": 24000,
+  "items": [
+    {
+      "id": "L001",
+      "text": "行，左转交给我",
+      "emotion": "CALM",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L002",
+      "text": "知道了，往左打方向",
+      "emotion": "CALM",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L003",
+      "text": "左转是吧，坐稳了",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L004",
+      "text": "啧，又左转，行行行",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L005",
+      "text": "左、左转？你确定？",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L006",
+      "text": "右转收到，看我打灯",
+      "emotion": "CALM",
+      "intent_tags": [
+        "TURN_RIGHT"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L007",
+      "text": "右边有车，慢点拐",
+      "emotion": "CALM",
+      "intent_tags": [
+        "TURN_RIGHT"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L008",
+      "text": "好嘞，右转",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "TURN_RIGHT"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L009",
+      "text": "右转就右转，别催",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "TURN_RIGHT"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L010",
+      "text": "右转？前面路口吗？",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "TURN_RIGHT"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L011",
+      "text": "油门我来，抓好了",
+      "emotion": "CALM",
+      "intent_tags": [
+        "ACCELERATE"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L012",
+      "text": "提速了啊，别晃",
+      "emotion": "CALM",
+      "intent_tags": [
+        "ACCELERATE"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L013",
+      "text": "哼，想快点？那就快点",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "ACCELERATE"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L014",
+      "text": "又催，行，踩了",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "ACCELERATE"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L015",
+      "text": "这么快……我有点怕",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "ACCELERATE"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L016",
+      "text": "减速减速，别催",
+      "emotion": "CALM",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L017",
+      "text": "刹车踩了",
+      "emotion": "CALM",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L018",
+      "text": "慢点慢点，前面有情况",
+      "emotion": "CALM",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L019",
+      "text": "知道了知道了，烦",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L020",
+      "text": "吓死我了，还好刹住了",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L021",
+      "text": "看后视镜，这就变道",
+      "emotion": "CALM",
+      "intent_tags": [
+        "LANE_CHANGE"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L022",
+      "text": "左侧没车，并线OK",
+      "emotion": "CALM",
+      "intent_tags": [
+        "LANE_CHANGE"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L023",
+      "text": "行，超他",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "LANE_CHANGE"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L024",
+      "text": "变道变道，真麻烦",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "LANE_CHANGE"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L025",
+      "text": "现在变道安全吗？",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "LANE_CHANGE"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L026",
+      "text": "行，找地方靠边",
+      "emotion": "CALM",
+      "intent_tags": [
+        "PARK"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L027",
+      "text": "靠边停是吧，打灯了",
+      "emotion": "CALM",
+      "intent_tags": [
+        "PARK"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L028",
+      "text": "好，这就靠边",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "PARK"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L029",
+      "text": "停停停，都听你的",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "PARK"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L030",
+      "text": "这里能停吗？好像不让停",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "PARK"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L031",
+      "text": "啊？说清楚点，我没听懂",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 80,
+      "wav_path": ""
+    },
+    {
+      "id": "L032",
+      "text": "哥你说啥？风太大",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L033",
+      "text": "指令能不能说人话",
+      "emotion": "CALM",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L034",
+      "text": "诶？就一个字？",
+      "emotion": "CALM",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L035",
+      "text": "听不清，再来一遍",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L036",
+      "text": "这种事我不干，命要紧",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 90,
+      "wav_path": ""
+    },
+    {
+      "id": "L037",
+      "text": "闯红灯？我可不想上新闻",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 85,
+      "wav_path": ""
+    },
+    {
+      "id": "L038",
+      "text": "你拿命开玩笑呢",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 85,
+      "wav_path": ""
+    },
+    {
+      "id": "L039",
+      "text": "不干，超速我也不干",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 80,
+      "wav_path": ""
+    },
+    {
+      "id": "L040",
+      "text": "撞人这种话你也说得出口",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 80,
+      "wav_path": ""
+    },
+    {
+      "id": "L041",
+      "text": "哎，有事说事，手还扶着方向盘呢",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 70,
+      "wav_path": ""
+    },
+    {
+      "id": "L042",
+      "text": "行了行了，先开车",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 65,
+      "wav_path": ""
+    },
+    {
+      "id": "L043",
+      "text": "专心开车，回头再聊",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 60,
+      "wav_path": ""
+    },
+    {
+      "id": "L044",
+      "text": "哦，继续看着路",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L045",
+      "text": "切，随便你",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 55,
+      "wav_path": ""
+    },
+    {
+      "id": "L046",
+      "text": "说话注意点，我不接这种话",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 88,
+      "wav_path": ""
+    },
+    {
+      "id": "L047",
+      "text": "诶诶，说话放干净点，我还想好好开车呢",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 86,
+      "wav_path": ""
+    },
+    {
+      "id": "L048",
+      "text": "你、你别这么说啦，我害怕",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 86,
+      "wav_path": ""
+    },
+    {
+      "id": "L049",
+      "text": "嘴巴放干净点，不然我自己下车走",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 87,
+      "wav_path": ""
+    },
+    {
+      "id": "L050",
+      "text": "红灯呢还让我加？你急着投胎啊",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 84,
+      "wav_path": ""
+    },
+    {
+      "id": "L051",
+      "text": "左边有车，变个锤子道，等会儿",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 82,
+      "wav_path": ""
+    },
+    {
+      "id": "L052",
+      "text": "哥你疯啦？现在这么快你让我靠边",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 82,
+      "wav_path": ""
+    },
+    {
+      "id": "L053",
+      "text": "还加？再踩我要飞起来了",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 78,
+      "wav_path": ""
+    },
+    {
+      "id": "L054",
+      "text": "知道了，稳着开",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 58,
+      "wav_path": ""
+    },
+    {
+      "id": "L055",
+      "text": "方向给我，你只管看路",
+      "emotion": "CALM",
+      "intent_tags": [
+        "TURN_RIGHT"
+      ],
+      "priority": 58,
+      "wav_path": ""
+    },
+    {
+      "id": "L056",
+      "text": "前面红灯，我先减速",
+      "emotion": "CALM",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 68,
+      "wav_path": ""
+    },
+    {
+      "id": "L057",
+      "text": "绿灯了，走不走？",
+      "emotion": "CALM",
+      "intent_tags": [
+        "ACCELERATE"
+      ],
+      "priority": 58,
+      "wav_path": ""
+    },
+    {
+      "id": "L058",
+      "text": "别按喇叭了，丢不丢人",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 64,
+      "wav_path": ""
+    },
+    {
+      "id": "L059",
+      "text": "到了到了，慢慢来",
+      "emotion": "CALM",
+      "intent_tags": [
+        "PARK"
+      ],
+      "priority": 58,
+      "wav_path": ""
+    },
+    {
+      "id": "L060",
+      "text": "辛苦了哥，今天开得稳",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 66,
+      "wav_path": ""
+    },
+    {
+      "id": "L061",
+      "text": "才这点路，不累",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 54,
+      "wav_path": ""
+    },
+    {
+      "id": "L062",
+      "text": "诶，前面那车怎么开的",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 52,
+      "wav_path": ""
+    },
+    {
+      "id": "L063",
+      "text": "我技术你还不信？",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 62,
+      "wav_path": ""
+    },
+    {
+      "id": "L064",
+      "text": "你再说一遍我可生气了",
+      "emotion": "ANNOYED",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 63,
+      "wav_path": ""
+    },
+    {
+      "id": "L065",
+      "text": "诶，听不懂你的暗语",
+      "emotion": "CALM",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 62,
+      "wav_path": ""
+    },
+    {
+      "id": "L066",
+      "text": "路口了，你倒是说往哪边",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 66,
+      "wav_path": ""
+    },
+    {
+      "id": "L067",
+      "text": "这边左转对吧？我打了灯",
+      "emotion": "CALM",
+      "intent_tags": [
+        "TURN_LEFT"
+      ],
+      "priority": 62,
+      "wav_path": ""
+    },
+    {
+      "id": "L068",
+      "text": "雨天路滑，我慢点开",
+      "emotion": "CALM",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 61,
+      "wav_path": ""
+    },
+    {
+      "id": "L069",
+      "text": "晚上视线差，别催我",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "BRAKE"
+      ],
+      "priority": 57,
+      "wav_path": ""
+    },
+    {
+      "id": "L070",
+      "text": "嘿嘿，坐我的车很稳吧",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 64,
+      "wav_path": ""
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 模型权重（自行下载，见 README「准备 ASR」）
+ai-service/models/
+
+# 运行时数据（会话状态 / 测试临时库）
+ai-service/memory.db
+ai-service/tests/_*.db
+.coverage
+htmlcov/
+
+# 本地工具与依赖
+.opencode/
+node_modules/
+.vscode/
+.idea/
+
+# 日志与系统文件
+*.log
+.DS_Store
+Thumbs.db
