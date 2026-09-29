@@ -33,7 +33,7 @@ AI_Game/
 │   ├── cli.py              # 命令行端到端原型（本地 / 远端 / --mic / --wav）
 │   ├── data/sensitive_words.txt
 │   ├── models/             # vosk 模型解压位置（模型需自行下载）
-│   └── tests/              # 187 项单元测试 + 44 项对话回归 + samples/ 语音样本
+│   └── tests/              # 195 项单元测试 + 44 项对话回归 + samples/ 语音样本
 ├── voice-corpus/
 │   ├── lines.csv           # 台词语料（单一数据源：id/text/emotion/intent_tags/priority）
 │   └── manifest.json       # 语音库索引（voicelib_gen.py 生成）
@@ -64,7 +64,7 @@ python server.py
 python cli.py --server 127.0.0.1:50051 --text "靠边停车"
 
 # 5) 测试
-python -m unittest discover -s tests      # 187 项单元测试
+python -m unittest discover -s tests      # 195 项单元测试
 python tests/run_dialogue_regression.py   # 44 项对话回归（方案 §6.2）
 
 # 6) 覆盖率（需 pip install coverage）
@@ -96,18 +96,21 @@ python cli.py --mic                       # 麦克风实时对话（说话→停
 | ASR | FunASR paraformer streaming | **Vosk 中文小模型** → 文本指令模式 | text（模型下载中） |
 | VAD | Silero VAD ONNX | 能量阈值 VAD | energy/none |
 | TTS | GPT-SoVITS 实时合成 | 预生成语音库 → 字幕静默 | voicelib |
-| 传输 | gRPC/protobuf | JSON-TCP（同事件结构） | json（未装 grpcio） |
+| 传输 | gRPC/protobuf | JSON-TCP（同事件结构） | **grpc**（`--transport json` 可回退） |
 
 装上依赖后无需改代码，`config.yaml` 里 `backend: auto` 会自动升级；也可显式指定并强制报错。
 
-## 开启 gRPC（方案正式传输层）
+## 开启 gRPC（方案正式传输层，**当前已接通**）
 
 ```bash
 pip install grpcio grpcio-tools
 cd ai-service
-python -m grpc_tools.protoc -I proto --python_out=proto --grpc_python_out=proto proto/copilot.proto
-python server.py --transport grpc   # 需将生成的 copilot_pb2*.py 置于 proto/ 下
+# 注意：-I 必须是仓库根（.），否则生成的 _grpc 文件用裸 import copilot_pb2，包内导入会失败
+python -m grpc_tools.protoc -I . --python_out=. --grpc_python_out=. proto/copilot.proto
+python server.py --transport grpc   # 生成的 copilot_pb2*.py 位于 proto/ 下
 ```
+
+三个 RPC：`VoiceTurn`（音频上行 → 事件流）、`TextTurn`（ASR 未装时的文本回合，事件结构与 JSON-TCP 的 `text_turn` 完全一致）、`SyncGameState` / `Ping`。
 
 ## 配置要点（config.yaml）
 

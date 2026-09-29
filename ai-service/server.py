@@ -133,6 +133,10 @@ def _try_start_grpc(pipeline: DialoguePipeline, host: str, port: int):
             for event in pipeline.handle_audio(chunks):
                 yield _event_to_proto(copilot_pb2, event)
 
+        def TextTurn(self, request, context):
+            for event in pipeline.handle_text(request.text):
+                yield _event_to_proto(copilot_pb2, event)
+
     server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=4))
     copilot_pb2_grpc.add_AIServiceServicer_to_server(Servicer(), server)
     server.add_insecure_port(f"{host}:{port}")

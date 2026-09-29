@@ -175,10 +175,48 @@ class ServeEntryTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
-    def test_serve_auto_falls_back_when_grpc_missing(self):
-        cfg = self._cfg()
+    @staticmethod
+    def _grpc_ready() -> bool:
+        import importlib.util
+
+        return (
+            importlib.util.find_spec("grpc") is not None
+            and importlib.util.find_spec("proto.copilot_pb2_grpc") is not None
+        )
+
+    @staticmethod
+    def _free_port() -> int:
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        sock.close()
+        return port
+
+    def test_serve_auto_starts_grpc_when_available(self):
+        if not self._grpc_ready():
+            self.skipTest("grpcio / copilot_pb2_grpc 不可用")
+        from proto import copilot_pb2, copilot_pb2_grpc
+        import grpc
+
+        cfg = self._cfg("auto")
+        cfg["server"]["port"] = self._free_port()
         with contextlib.redirect_stdout(io.StringIO()):
             server = serve(cfg, block=False)
+        try:
+            self.assertFalse(hasattr(server, "server_address"))
+            with grpc.insecure_channel(f"127.0.0.1:{cfg['server']['port']}") as channel:
+                stub = copilot_pb2_grpc.AIServiceStub(channel)
+                health = stub.Ping(copilot_pb2.Empty(), timeout=5)
+            self.assertTrue(health.ok)
+            self.assertEqual(health.llm_backend, "rule")
+        finally:
+            server.stop(0)
+
+    def test_serve_auto_falls_back_to_json_when_grpc_unavailable(self):
+        cfg = self._cfg()
+        with mock.patch("server._try_start_grpc", return_value=None):
+            with contextlib.redirect_stdout(io.StringIO()):
+                server = serve(cfg, block=False)
         try:
             payload = self._ping(server.server_address[1])
             self.assertEqual(payload["kind"], "health")
@@ -188,9 +226,10 @@ class ServeEntryTest(unittest.TestCase):
 
     def test_forced_grpc_without_dependency_exits(self):
         cfg = self._cfg()
-        with self.assertRaises(SystemExit):
-            with contextlib.redirect_stdout(io.StringIO()):
-                serve(cfg, "grpc", block=False)
+        with mock.patch("server._try_start_grpc", return_value=None):
+            with self.assertRaises(SystemExit):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    serve(cfg, "grpc", block=False)
 
     def test_main_parses_args_and_blocks(self):
         import server as server_module

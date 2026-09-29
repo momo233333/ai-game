@@ -3,9 +3,13 @@ package copilot;
 
 service AIService {
   rpc VoiceTurn(stream AudioChunk) returns (stream TurnEvent);
+  // ASR 未就绪 / 文本调试时的文本回合（与 JSON-TCP 的 text_turn 同事件结构）
+  rpc TextTurn(TextRequest) returns (stream TurnEvent);
   rpc SyncGameState(GameState) returns (Ack);
   rpc Ping(Empty) returns (Health);
 }
+
+message TextRequest { string text = 1; }
 
 message AudioChunk {
   bytes pcm16 = 1;
