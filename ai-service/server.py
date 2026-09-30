@@ -214,7 +214,7 @@ def serve(cfg: dict, transport: str | None = None, block: bool = True):
     if choice in ("auto", "grpc"):
         grpc_server = _try_start_grpc(pipeline, host, port)
         if grpc_server is not None:
-            print(f"[server] gRPC listening on {host}:{port} | {json.dumps(pipeline.health, ensure_ascii=False)}")
+            print(f"[server] gRPC listening on {host}:{port} | {json.dumps(pipeline.health, ensure_ascii=False)}", flush=True)
             if not block:
                 return grpc_server
             try:
@@ -226,7 +226,7 @@ def serve(cfg: dict, transport: str | None = None, block: bool = True):
             raise SystemExit("gRPC unavailable: install grpcio/grpcio-tools and generate proto/copilot_pb2*.py")
 
     json_server = JsonServer(host, port, pipeline)
-    print(f"[server] JSON-TCP listening on {host}:{json_server.server_address[1]} | {json.dumps(pipeline.health, ensure_ascii=False)}")
+    print(f"[server] JSON-TCP listening on {host}:{json_server.server_address[1]} | {json.dumps(pipeline.health, ensure_ascii=False)}", flush=True)
     thread = threading.Thread(target=json_server.serve_forever, daemon=True)
     thread.start()
     if not block:
