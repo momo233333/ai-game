@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 无 Unity Editor 时的编译检查：把 Assets/Scripts 全量对着 UnityEngine 桩编译，
+       只为抓 API 误用 / 语法错误 / 缺 using，不产出可运行产物。 -->
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>9.0</LangVersion>
+    <AssemblyName>UnityCompileCheck</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0649;CS0414;CS0169</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Assets\Scripts\**\*.cs" />
+    <Compile Include="UnityStubs.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,33 @@
+# Unity 生成目录
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# 由 Unity 自动生成的解决方案与工程文件（保留 Tests~ 下手写的核心测试工程）
+/*.csproj
+/*.sln
+/*.user
+/*.pidb
+/*.booproj
+/*.svd
+/*.userprefs
+
+# IDE
+.vs/
+.idea/
+.vscode/
+*.csproj.user
+
+# 崩溃与日志
+sysinfo.txt
+crashlytics-build.properties
+
+# 无头测试的构建产物
+Tests~/**/bin/
+Tests~/**/obj/
