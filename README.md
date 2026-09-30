@@ -33,7 +33,7 @@ AI_Game/
 │   ├── cli.py              # 命令行端到端原型（本地 / 远端 / --mic / --wav）
 │   ├── data/sensitive_words.txt
 │   ├── models/             # vosk 模型解压位置（模型需自行下载）
-│   └── tests/              # 208 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
+│   └── tests/              # 223 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
 ├── unity/                  # Unity 2022.3 工程（阶段 S6 骨架）
 │   ├── Assets/Scripts/
 │   │   ├── Core/           # ★ 纯 C#（无 UnityEngine）：JSON-TCP 会话、TurnEvent、
@@ -49,8 +49,11 @@ AI_Game/
 │       └── UnityStubs/     # UnityEngine 桩：Assets/Scripts 全量编译检查
 ├── voice-corpus/
 │   ├── lines.csv           # 台词语料（单一数据源：id/text/emotion/intent_tags/priority）
-│   └── manifest.json       # 语音库索引（voicelib_gen.py 生成）
-└── tools/voicelib_gen.py   # 语音库批量生成脚本
+│   ├── wavs/               # ★ 台词音频（70 条 24k 单声道 wav，voicelib_synth.py 生成）
+│   └── manifest.json       # 语音库索引（voicelib_gen.py 生成，带 wav_path）
+└── tools/
+    ├── voicelib_gen.py     # 语音库索引生成脚本
+    └── voicelib_synth.py   # 台词 wav 批量合成（Windows 中文 TTS → 24k 归一化）
 ```
 
 ## 快速开始
@@ -60,6 +63,8 @@ cd AI_Game
 
 # 1) 生成语音库索引（CSV → manifest.json）
 python tools/voicelib_gen.py
+#    台词音频 voice-corpus/wavs/ 已随仓库提供；缺了/加了新台词时补合成（Windows 中文 TTS）：
+#    python tools/voicelib_synth.py            # 只补缺失；--force 全量重合成；--only L001,L007 单条
 
 # 2) 启动真 LLM（可选，不启动则自动降级到规则引擎）
 & ai-service\models\llama\llama-server.exe `
@@ -82,7 +87,7 @@ python server.py
 python cli.py --server 127.0.0.1:50051 --text "靠边停车"
 
 # 6) 测试
-python -m unittest discover -s tests      # 208 项单元测试（llama-server 不在线时 4 项 skip）
+python -m unittest discover -s tests      # 223 项单元测试（llama-server 不在线时 4 项 skip）
 python tests/run_dialogue_regression.py   # 44 项对话回归（方案 §6.2，固定 rule 后端）
 
 # 6) 覆盖率（需 pip install coverage）
@@ -107,7 +112,7 @@ dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj"                 
 ```
 
 - **指令先执行、台词后播放**：`DriveAction` 在 LLM 输出的首个字段产出，与文本流解耦。
-- **TTS 双路由**：先查 `voicelib://` 精确/语义命中（~0ms），未命中走实时合成（未装则降级为字幕 + 静默）。
+- **TTS 双路由**：先查 `voicelib://` 精确/语义命中（~0ms，命中则下发**裸 PCM16 + `sample_rate`**），未命中走实时合成（未装则降级为字幕 + 静默）；词条命中但 wav 缺失时**回落实时合成**，不谎报语音库。
 - **安全双层**：输入层敏感词命中直接返回预置拒绝台词，不进 LLM；输出层再过一遍词库。
 
 ## 降级矩阵（当前骨架全部生效）
@@ -117,7 +122,7 @@ dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj"                 
 | LLM | llama.cpp (Qwen2.5 GGUF) | OpenAI 兼容 HTTP → **规则引擎** | **openai**（llama-server:8080，实测 108 tok/s） |
 | ASR | FunASR paraformer streaming | **Vosk 中文小模型** → 文本指令模式 | text（模型下载中） |
 | VAD | Silero VAD ONNX | 能量阈值 VAD | energy/none |
-| TTS | GPT-SoVITS 实时合成 | 预生成语音库 → 字幕静默 | voicelib |
+| TTS | GPT-SoVITS 实时合成 | 预生成语音库 → 字幕静默 | **voicelib（70 条 24k wav 已就位，真 PCM 下发）** |
 | 传输 | gRPC/protobuf | JSON-TCP（同事件结构） | **grpc**（`--transport json` 可回退） |
 
 装上依赖后无需改代码，`config.yaml` 里 `backend: auto` 会自动升级；也可显式指定并强制报错。
@@ -140,6 +145,7 @@ python server.py --transport grpc   # 生成的 copilot_pb2*.py 位于 proto/ �
 - `vad.backend` / `asr.backend` / `server.transport`: 同理
 - `memory.*`: 滑动窗口、旧账阈值（`trust_delta <= -5` 写入 SQLite，按 `save_slot` 分区）
 - `tts.voicelib_path`: 语音库 manifest 位置
+- `tts.sample_rate`: 下行 PCM 采样率（默认 24000，与 `voice-corpus/wavs/` 一致，同时进 `tts_audio.sample_rate` 事件与 proto）
 
 ## 语音交流测试（怎么测“说话”）
 

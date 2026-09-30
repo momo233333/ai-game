@@ -2,24 +2,25 @@
 
 ## Project shape
 
-This repository is a Python prototype for an AI driving companion. The runtime is in `ai-service/`; `voice-corpus/` is the dialogue source data, and `tools/voicelib_gen.py` builds its TTS manifest. The original implementation plan is in `IT方案1.md`.
+This repository is a Python prototype for an AI driving companion. The runtime is in `ai-service/`; `voice-corpus/` is the dialogue source data, `tools/voicelib_gen.py` builds its TTS manifest, and `tools/voicelib_synth.py` batch-synthesizes the per-line wav assets in `voice-corpus/wavs/` (Windows Chinese TTS, normalized to 24 kHz mono 16-bit). The original implementation plan is in `IT方案1.md`.
 
 Read `开发进度.md` first: it records the current stage of `IT方案1.md` §10 (S1–S12), the environment snapshot, the verification baseline commands, known debt, and the next steps. Update it (including its changelog) whenever a stage lands, a bug is fixed, or a baseline number changes, so the next session does not have to re-analyze the project.
 
-The main flow is `cli.py` or `server.py` → `pipeline.py` → components in `core/`. `DialoguePipeline` turns text or audio into a stream of `TurnEvent`s. For a text turn, it checks input safety first, then streams the validated `drive_action` before dialogue text, routes speech through TTS, and emits the trust/emotion `state_delta`. Audio goes through VAD and ASR before entering the same text-turn flow. Keep event names and payloads compatible across the pipeline, JSON-TCP transport, and the protobuf adapter in `server.py`; the contract is defined in `ai-service/proto/copilot.proto`.
+The main flow is `cli.py` or `server.py` → `pipeline.py` → components in `core/`. `DialoguePipeline` turns text or audio into a stream of `TurnEvent`s. For a text turn, it checks input safety first, then streams the validated `drive_action` before dialogue text, routes speech through TTS, and emits the trust/emotion `state_delta`. Audio goes through VAD and ASR before entering the same text-turn flow. Keep event names and payloads compatible across the pipeline, JSON-TCP transport, and the protobuf adapter in `server.py`; the contract is defined in `ai-service/proto/copilot.proto`. `tts_audio.pcm16` is **headerless** little-endian PCM16 (never a RIFF file), always paired with `sample_rate` in the payload and in `TtsAudio.sample_rate`; the C# `PcmAudio` decoder assumes exactly that.
 
 `core/types.py` defines shared game state, intents, actions, and event structures. `core/action_parser.py` is the final allow-list, range-clamping, and telemetry-based rule check for model-proposed driving actions. `core/safety.py` protects both input and generated dialogue. `core/state.py` owns trust and emotion transitions. `core/dialogue.py` builds dialogue context and persists turn memory in SQLite.
 
-LLM, ASR, VAD, and TTS have replaceable or optional backends. Backend selection and thresholds live in `ai-service/config.yaml`, with defaults and relative-path resolution in `ai-service/config.py`. Preserve the `auto`/fallback behavior when changing integrations. The dialogue lines in `voice-corpus/lines.csv` are the source of truth for corpus metadata; regenerate `voice-corpus/manifest.json` with the generator after changing those lines.
+LLM, ASR, VAD, and TTS have replaceable or optional backends. Backend selection and thresholds live in `ai-service/config.yaml`, with defaults and relative-path resolution in `ai-service/config.py`. Preserve the `auto`/fallback behavior when changing integrations. The dialogue lines in `voice-corpus/lines.csv` are the source of truth for corpus metadata; regenerate `voice-corpus/manifest.json` with the generator after changing those lines, and run `python tools/voicelib_synth.py` to synthesize wav for new lines (tests assert every manifest entry has a wav: `test_wav_assets_committed`).
 
 ## Build, run, and test
 
 There is no separate build command or configured lint command. The project uses Python's standard-library `unittest`; optional integrations and coverage tooling are documented separately below.
 
-From the repository root, regenerate the voice-library manifest:
+From the repository root, regenerate the voice-library manifest (and re-synthesize wavs if any are missing):
 
 ```sh
 python tools/voicelib_gen.py
+python tools/voicelib_synth.py
 ```
 
 Run the service or CLI from `ai-service/`:
