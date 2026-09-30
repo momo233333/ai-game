@@ -295,5 +295,37 @@ class CliRemoteTest(unittest.TestCase):
         self.assertIn("(-8)", buffer.getvalue())
 
 
+class GPTSoVITSEngineTest(unittest.TestCase):
+    def test_unavailable_engine_reports_reason(self):
+        from core.tts.gpt_sovits import GPTSoVITSEngine
+
+        engine = GPTSoVITSEngine({})
+        if engine.available:
+            self.skipTest("GPT_SoVITS 已安装，走不到降级分支")
+        result = engine.synth("你好")
+        self.assertFalse(result.ok)
+        self.assertIn("gpt_sovits_unavailable:", result.reason)
+
+    def test_available_but_pipeline_not_wired(self):
+        from core.tts.gpt_sovits import GPTSoVITSEngine
+
+        engine = GPTSoVITSEngine({})
+        engine.available = True
+        engine.reason = ""
+        result = engine.synth("你好")
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "gpt_sovits_pipeline_not_wired")
+
+    def test_find_spec_exception_captured(self):
+        import importlib.util
+
+        from core.tts.gpt_sovits import GPTSoVITSEngine
+
+        with mock.patch.object(importlib.util, "find_spec", side_effect=RuntimeError("boom")):
+            engine = GPTSoVITSEngine({})
+        self.assertFalse(engine.available)
+        self.assertEqual(engine.reason, "boom")
+
+
 if __name__ == "__main__":
     unittest.main()
