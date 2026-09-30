@@ -47,6 +47,22 @@ python -m coverage run --append --source=core,pipeline,server,cli,config tests/r
 python -m coverage report -m
 ```
 
+## Unity side
+
+The Unity project lives in `unity/` (2022.3 skeleton, no Editor installed on the dev box yet). It splits into:
+
+- `unity/Assets/Scripts/Core/` — plain C#, no `UnityEngine` namespace: the JSON-TCP session, `TurnEvent`/`DriveAction` parsing, `ActionExecutorCore` clamping/smoothing, `StateView` trust/emotion, PCM helpers. Keep it engine-free so it stays testable.
+- `unity/Assets/Scripts/{AI,Vehicle,State,Audio,UI}/` — thin MonoBehaviours that only wire references and marshal events to the main thread.
+- `unity/Tests~/` — Unity ignores `~` folders. `CoreTests` is a zero-NuGet .NET console runner (it spawns the real `server.py` for end-to-end checks); `UnityStubs` compiles all of `Assets/Scripts` against a hand-written UnityEngine stub to catch API misuse.
+
+```sh
+# from the repository root
+dotnet run --project "unity/Tests~/CoreTests/CoreTests.csproj" -- --require-server
+dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj"
+```
+
+Mirror server-side constants instead of inventing new ones: intent whitelist (`core/types.py`), `LOCAL_EVENTS`/`next_emotion` (`core/state.py`), and the JSON-TCP frame shapes in `server.py` — there are tests asserting they match.
+
 ## Repository conventions
 
 - Keep `DriveAction` intents within `ALLOWED_INTENTS`; dangerous or unknown intents must be refused by `ActionParser`, not passed through to the game.

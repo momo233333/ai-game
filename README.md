@@ -34,6 +34,19 @@ AI_Game/
 │   ├── data/sensitive_words.txt
 │   ├── models/             # vosk 模型解压位置（模型需自行下载）
 │   └── tests/              # 208 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
+├── unity/                  # Unity 2022.3 工程（阶段 S6 骨架）
+│   ├── Assets/Scripts/
+│   │   ├── Core/           # ★ 纯 C#（无 UnityEngine）：JSON-TCP 会话、TurnEvent、
+│   │   │                   #   ActionExecutor 数学、信任/情绪表现层、PCM 处理
+│   │   ├── AI/AIClient.cs  # MonoBehaviour 封装：后台线程收发 → 主线程分发
+│   │   ├── Vehicle/        # VehicleController(WheelCollider) + ActionExecutor 中间层
+│   │   ├── State/          # GameStateManager（信任/情绪/遥测同步）
+│   │   ├── Audio/          # MicCapture(PTT 上行) + TtsPlayer(下行) + ducking
+│   │   ├── UI/             # 对话气泡打字机 / 表情 / HUD / 文本调试输入
+│   │   └── CopilotBootstrap.cs # 一键装配，挂一个组件即可跑闭环
+│   └── Tests~/             # 无头测试（Unity 忽略 ~ 结尾目录）
+│       ├── CoreTests/      # Core 单测 + 起真 python server 的端到端联调
+│       └── UnityStubs/     # UnityEngine 桩：Assets/Scripts 全量编译检查
 ├── voice-corpus/
 │   ├── lines.csv           # 台词语料（单一数据源：id/text/emotion/intent_tags/priority）
 │   └── manifest.json       # 语音库索引（voicelib_gen.py 生成）
@@ -81,6 +94,10 @@ python -m coverage report -m
 python tools/make_speech_samples.py       # 用 Windows 中文 TTS 生成语音样本
 python cli.py --wav tests\samples\left_turn.wav   # 音频 → 识别 → 动作闭环
 python cli.py --mic                       # 麦克风实时对话（说话→停顿半秒出结果）
+
+# 8) Unity 侧测试（需 .NET SDK 8，仓库根目录执行）
+dotnet run --project "unity/Tests~/CoreTests/CoreTests.csproj" -- --require-server   # 23 项：Core 单测 + 起真服务联调
+dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj"                      # Assets/Scripts 对桩编译
 ```
 
 ## 事件流（与方案 §3.1 对应）
@@ -162,10 +179,34 @@ python cli.py --mic --free                # 免提模式：说完停顿约 0.6s 
 **验证要点：** ① 字幕在说话过程中滚动 ② 松开 Ctrl（或免提模式停顿 0.6s）后 1 秒内出动作 ③ 危险指令（`speed_100.wav` 无速度同步时）走正常路径、同步速度后 `--event` 可触发拦截 ④ `swear.wav` 应被输入层敏感词拦截（不进 LLM）。
 
 
+## Unity 侧（阶段 S6 骨架已落地）
 
-服务端已按 `proto/copilot.proto` 输出事件，Unity 侧只需：
+工程在 `unity/`（Unity 2022.3 LTS + URP 可选），代码分两层：
 
-1. `Microphone` 采集 → 16kHz PCM → `VoiceTurn` 上行（当前 ASR 未装时走 `text_turn`）；
-2. 收到 `drive_action` 交给 `ActionExecutor` 平滑执行；
-3. `tts_audio.text` 渲染气泡，`state_delta` 刷新信任条/表情；
-4. 撞车/闯红灯等物理判定回推 `local_event`（`SyncGameState` 同步数值）。
+- **`Assets/Scripts/Core/`**：纯 C#，零 UnityEngine 依赖 —— JSON-TCP 会话（断线重连/请求串行化）、
+  `TurnEvent` 解析、`ActionExecutorCore` 限幅+平滑（方案 §5.1）、`StateView` 信任/情绪（与 `core/state.py`
+  同规则同事件表）、PCM16 解码/重采样。**这层有独立测试，不装 Unity 也能验。**
+- **`Assets/Scripts/{AI,Vehicle,State,Audio,UI}/`**：MonoBehaviour 薄封装，只做引用装配与主线程分发。
+
+**接入步骤**：场景里放一辆带 `WheelCollider×4` 的车 → 挂 `CopilotBootstrap` 并拖入 `VehicleController`
+→ 启动 `python ai-service/server.py`（默认 50051）→ Play。文本框（`TextInputSender`）可直接发指令，
+按住 `V` 走麦克风上行（需 ASR 就位）。
+
+```
+文本/语音 → AIClient → ActionExecutor(drive_action, 先动) → VehicleController
+                     ↘ TtsPlayer(tts_audio 字幕+播放) → DialogueBubble
+                     ↘ GameStateManager(state_delta) → 信任条/表情
+```
+
+**无头测试（CI 也跑这套）**：
+
+```bash
+dotnet run --project "unity/Tests~/CoreTests/CoreTests.csproj" -- --require-server  # Core 单测 + 起真服务端到端
+dotnet run --project "unity/Tests~/CoreTests/CoreTests.csproj" -- --no-server       # 只跑纯逻辑
+dotnet run --project "unity/Tests~/CoreTests/CoreTests.csproj" -- --filter Executor # 按名字过滤
+dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj"                     # MonoBehaviour 层对桩编译
+```
+
+**CI**：`.github/workflows/ci.yml` —— push/PR 自动跑 Python 单测 + 对话回归 + 覆盖率、
+Unity 脚本编译检查、Core 测试（起真 `server.py`，服务不可用即红）。
+
