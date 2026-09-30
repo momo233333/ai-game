@@ -4,6 +4,8 @@ import json
 import os
 from dataclasses import dataclass
 
+from ..audio import load_wav_pcm
+
 
 @dataclass
 class VoiceEntry:
@@ -73,6 +75,7 @@ class VoiceLib:
         return None
 
     def wav_bytes(self, entry: VoiceEntry) -> bytes | None:
+        """原始 wav 文件字节（含 RIFF 头），仅调试用。"""
         if not entry.wav_path:
             return None
         path = entry.wav_path if os.path.isabs(entry.wav_path) else os.path.join(self.base_dir, entry.wav_path)
@@ -80,3 +83,15 @@ class VoiceLib:
             return None
         with open(path, "rb") as fh:
             return fh.read()
+
+    def pcm16(self, entry: VoiceEntry) -> bytes | None:
+        """传输用原始 PCM16（无 RIFF 头），单声道，重采样到 manifest sample_rate。"""
+        if not entry.wav_path:
+            return None
+        path = entry.wav_path if os.path.isabs(entry.wav_path) else os.path.join(self.base_dir, entry.wav_path)
+        if not os.path.exists(path):
+            return None
+        try:
+            return load_wav_pcm(path, self.sample_rate)
+        except (OSError, ValueError, EOFError):
+            return None

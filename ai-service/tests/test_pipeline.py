@@ -90,6 +90,25 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(tts["from_voicelib"])
         self.assertEqual(tts["route"], "voicelib")
 
+    def test_tts_audio_carries_sample_rate_and_pcm(self):
+        _, bag = collect(self.pipeline, "前面路口左转")
+        tts = bag["tts_audio"].data
+        self.assertEqual(tts["sample_rate"], 24000)
+        self.assertTrue(tts["pcm16"], "语音库 wav 未生成？先跑 python tools/voicelib_synth.py")
+        self.assertFalse(tts["pcm16"].startswith(b"RIFF"))
+        self.assertAlmostEqual(len(tts["pcm16"]) / 2 / tts["sample_rate"], 3.0, delta=4.0)
+
+    def test_tts_sample_rate_follows_config(self):
+        saved = self.pipeline.cfg.get("tts", {}).get("sample_rate")
+        self.pipeline.cfg.setdefault("tts", {})["sample_rate"] = 16000
+        try:
+            self.assertEqual(self.pipeline._tts_sample_rate(), 16000)
+        finally:
+            if saved is None:
+                self.pipeline.cfg["tts"].pop("sample_rate", None)
+            else:
+                self.pipeline.cfg["tts"]["sample_rate"] = saved
+
     def test_empty_input_error(self):
         events, _ = collect(self.pipeline, "   ")
         self.assertEqual(events[0].kind, "error")

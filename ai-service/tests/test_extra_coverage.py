@@ -124,8 +124,24 @@ class VoiceLibWavTest(unittest.TestCase):
     def test_missing_wav_returns_none(self):
         lib = VoiceLib(MANIFEST)
         entry = lib.entries[0]
+        saved = entry.wav_path
         entry.wav_path = "does_not_exist.wav"
-        self.assertIsNone(lib.wav_bytes(entry))
+        try:
+            self.assertIsNone(lib.wav_bytes(entry))
+            self.assertIsNone(lib.pcm16(entry))
+        finally:
+            entry.wav_path = saved
+
+    def test_empty_wav_path_returns_none(self):
+        lib = VoiceLib(MANIFEST)
+        entry = lib.entries[0]
+        saved = entry.wav_path
+        entry.wav_path = ""
+        try:
+            self.assertIsNone(lib.wav_bytes(entry))
+            self.assertIsNone(lib.pcm16(entry))
+        finally:
+            entry.wav_path = saved
 
     def test_manifest_missing_is_not_loaded(self):
         lib = VoiceLib(os.path.join(tempfile.gettempdir(), "no_manifest.json"))

@@ -134,6 +134,19 @@ class GrpcServicerTest(unittest.TestCase):
                 self.assertEqual(proto.WhichOneof("payload"), expected)
         self.assertEqual(_event_to_proto(pb2, TurnEvent(kind="mystery", data={})).WhichOneof("payload"), None)
 
+    def test_tts_audio_proto_carries_sample_rate(self):
+        from core.types import TurnEvent
+        from server import _event_to_proto
+
+        pb2 = self.copilot_pb2
+        proto = _event_to_proto(
+            pb2, TurnEvent(kind="tts_audio", data={"pcm16": b"\x01\x02", "sample_rate": 16000})
+        )
+        self.assertEqual(proto.tts_audio.sample_rate, 16000)
+        self.assertEqual(proto.tts_audio.pcm16, b"\x01\x02")
+        default = _event_to_proto(pb2, TurnEvent(kind="tts_audio", data={"pcm16": b""}))
+        self.assertEqual(default.tts_audio.sample_rate, 24000)
+
     def test_state_dict_conversion_helpers(self):
         from server import copilot_emotion_name, copilot_emotion_reverse
 

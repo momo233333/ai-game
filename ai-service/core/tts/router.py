@@ -48,14 +48,16 @@ class TTSRouter:
             if entry is None:
                 entry = self.voicelib.lookup(text, emotion)
             if entry is not None:
-                pcm = self.voicelib.wav_bytes(entry) or b""
-                return RouteResult(
-                    kind="voicelib",
-                    text=entry.text,
-                    from_voicelib=True,
-                    entry=entry,
-                    pcm16=pcm,
-                )
+                pcm = self.voicelib.pcm16(entry) or b""
+                if pcm:
+                    return RouteResult(
+                        kind="voicelib",
+                        text=entry.text,
+                        from_voicelib=True,
+                        entry=entry,
+                        pcm16=pcm,
+                    )
+                # 有匹配词条但 wav 缺失/损坏 → 不谎报 voicelib，继续走实时 TTS
 
         if self.realtime_enabled and getattr(self.realtime, "available", False):
             result = self.realtime.synth(text, emotion=emotion)

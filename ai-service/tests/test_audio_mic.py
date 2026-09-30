@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from array import array
 
-from core.audio import resample_pcm16, to_mono, wav_chunks, write_wav
+from core.audio import load_wav_pcm, resample_pcm16, to_mono, wav_chunks, write_wav
 from core.mic import MicCapture, _stereo_to_mono_bytes
 
 SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -99,6 +99,52 @@ class WavIoTest(unittest.TestCase):
                 wf.writeframes(b"\x80" * 8000)
             with self.assertRaises(ValueError):
                 list(wav_chunks(path))
+
+
+class LoadWavPcmTest(unittest.TestCase):
+    def test_roundtrip_same_rate(self):
+        pcm = sine_pcm(24000, 0.2)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.wav")
+            write_wav(path, pcm, rate=24000)
+            self.assertEqual(load_wav_pcm(path, 24000), pcm)
+
+    def test_resample_44100_to_24000(self):
+        pcm = sine_pcm(44100, 1.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.wav")
+            write_wav(path, pcm, rate=44100)
+            out = load_wav_pcm(path, 24000)
+        self.assertAlmostEqual(len(out) // 2, 24000, delta=10)
+
+    def test_stereo_to_mono(self):
+        stereo = array("h")
+        for i in range(100):
+            stereo.extend([100 + i, 300 + i])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "s.wav")
+            write_wav(path, stereo.tobytes(), rate=16000, channels=2)
+            out = load_wav_pcm(path, 16000)
+        self.assertEqual(struct.unpack(f"<{len(out) // 2}h", out)[:3], (200, 201, 202))
+
+    def test_empty_wav(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "e.wav")
+            write_wav(path, b"", rate=24000)
+            self.assertEqual(load_wav_pcm(path, 24000), b"")
+
+    def test_rejects_8bit(self):
+        import wave
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.wav")
+            with wave.open(path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(1)
+                wf.setframerate(8000)
+                wf.writeframes(b"\x80" * 8000)
+            with self.assertRaises(ValueError):
+                load_wav_pcm(path, 16000)
 
 
 class MicCaptureTest(unittest.TestCase):

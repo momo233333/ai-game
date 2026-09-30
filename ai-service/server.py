@@ -190,6 +190,7 @@ def _event_to_proto(copilot_pb2, event: TurnEvent):
         te.tts_audio.pcm16 = data.get("pcm16", b"")
         te.tts_audio.from_voicelib = bool(data.get("from_voicelib", False))
         te.tts_audio.text = data.get("text", "")
+        te.tts_audio.sample_rate = int(data.get("sample_rate", 24000))
     elif kind == "state_delta":
         te.state_delta.trust = float(data.get("trust", 0))
         te.state_delta.trust_delta = float(data.get("trust_delta", 0))

@@ -71,6 +71,7 @@ message TtsAudio {
   bytes pcm16 = 1;
   bool from_voicelib = 2;
   string text = 3;
+  int32 sample_rate = 4;
 }
 
 message Empty {}

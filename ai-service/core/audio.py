@@ -78,3 +78,23 @@ def write_wav(path: str, pcm16: bytes, rate: int = TARGET_RATE, channels: int = 
         wf.setsampwidth(2)
         wf.setframerate(rate)
         wf.writeframes(pcm16)
+
+
+def load_wav_pcm(path: str, target_rate: int) -> bytes:
+    """读 wav（16-bit）→ 单声道原始 PCM16，重采样到 target_rate。
+
+    与 write_wav 互逆；供 voicelib 这类「文件存 wav、传输走 pcm16」的场景使用。
+    """
+    with wave.open(path, "rb") as wf:
+        channels = wf.getnchannels()
+        width = wf.getsampwidth()
+        src_rate = wf.getframerate()
+        if width != 2:
+            raise ValueError(f"only 16-bit pcm supported, got width={width}")
+        raw = wf.readframes(wf.getnframes())
+    if not raw:
+        return b""
+    samples = array("h")
+    samples.frombytes(raw)
+    mono = to_mono(samples, channels)
+    return resample_pcm16(mono.tobytes(), src_rate, target_rate)

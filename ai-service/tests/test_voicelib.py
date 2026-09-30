@@ -42,6 +42,31 @@ class VoiceLibTest(unittest.TestCase):
         self.assertIsNone(self.lib.resolve_uri("voicelib://nope"))
         self.assertIsNone(self.lib.resolve_uri(None))
 
+    def test_wav_assets_committed(self):
+        missing = [e.id for e in self.lib.entries if not e.wav_path]
+        self.assertEqual(missing, [], f"wav 资产缺失（先跑 python tools/voicelib_synth.py）: {missing}")
+
+    def test_pcm16_strips_riff_header(self):
+        entry = self.lib.entries[0]
+        raw = self.lib.wav_bytes(entry)
+        pcm = self.lib.pcm16(entry)
+        self.assertTrue(raw.startswith(b"RIFF"))
+        self.assertTrue(pcm)
+        self.assertFalse(pcm.startswith(b"RIFF"))
+        self.assertEqual(len(raw) - len(pcm), 44)
+        duration = len(pcm) / 2 / 24000
+        self.assertGreater(duration, 0.3)
+        self.assertLess(duration, 30)
+
+    def test_pcm16_missing_file_returns_none(self):
+        entry = self.lib.entries[0]
+        saved = entry.wav_path
+        entry.wav_path = "does_not_exist.wav"
+        try:
+            self.assertIsNone(self.lib.pcm16(entry))
+        finally:
+            entry.wav_path = saved
+
 
 class TTSRouterTest(unittest.TestCase):
     @classmethod
@@ -54,6 +79,26 @@ class TTSRouterTest(unittest.TestCase):
         result = router.route(line.text, emotion="CALM")
         self.assertEqual(result.kind, "voicelib")
         self.assertTrue(result.from_voicelib)
+
+    def test_route_carries_pcm(self):
+        router = TTSRouter({"tts": {"voicelib_enabled": True, "realtime_enabled": False}}, self.lib)
+        line = self.lib.entries[0]
+        result = router.route(line.text)
+        self.assertEqual(result.kind, "voicelib")
+        self.assertTrue(result.pcm16)
+        self.assertFalse(result.pcm16.startswith(b"RIFF"))
+
+    def test_missing_wav_does_not_fake_voicelib(self):
+        router = TTSRouter({"tts": {"voicelib_enabled": True, "realtime_enabled": False}}, self.lib)
+        line = self.lib.entries[0]
+        saved = line.wav_path
+        line.wav_path = ""
+        try:
+            result = router.route(line.text)
+        finally:
+            line.wav_path = saved
+        self.assertNotEqual(result.kind, "voicelib")
+        self.assertFalse(result.from_voicelib)
 
     def test_hint_uri_wins(self):
         router = TTSRouter({"tts": {"voicelib_enabled": True, "realtime_enabled": False}}, self.lib)
@@ -82,6 +127,17 @@ class ManifestShapeTest(unittest.TestCase):
         item = data["items"][0]
         for key in ("id", "text", "emotion", "intent_tags", "wav_path"):
             self.assertIn(key, item)
+
+    def test_wav_paths_are_portable(self):
+        """manifest 进 git，wav_path 必须正斜杠且真实存在（Windows 生成 → Linux CI 可读）。"""
+        with open(MANIFEST, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        paths = [it["wav_path"] for it in data["items"] if it["wav_path"]]
+        self.assertTrue(paths, "manifest 里没有任何 wav_path")
+        base = os.path.dirname(MANIFEST)
+        for rel in paths:
+            self.assertNotIn("\\", rel)
+            self.assertTrue(os.path.exists(os.path.join(base, *rel.split("/"))), rel)
 
 
 if __name__ == "__main__":

@@ -220,8 +220,12 @@ class DialoguePipeline:
                 "text": route.text or text,
                 "route": route.kind,
                 "reason": route.reason,
+                "sample_rate": self._tts_sample_rate(),
             },
         )
+
+    def _tts_sample_rate(self) -> int:
+        return int(self.cfg.get("tts", {}).get("sample_rate", 24000))
 
 
 def _action_payload(action: DriveAction) -> dict:

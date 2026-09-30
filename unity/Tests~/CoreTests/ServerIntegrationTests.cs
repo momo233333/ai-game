@@ -271,12 +271,16 @@ namespace Copilot.Tests
                 var tts = events.First(e => e.Kind == "tts_audio");
                 Assert.True(tts.Data.ContainsKey("pcm16"), "tts_audio 带 pcm16 字段");
                 Assert.True(SimpleJson.GetString(tts.Data, "text").Length > 0, "tts_audio 带字幕文本");
+                Assert.Equal(24000, SimpleJson.GetInt(tts.Data, "sample_rate", 0), "tts_audio.sample_rate");
+                Assert.True(SimpleJson.GetBool(tts.Data, "from_voicelib"), "回复命中语音库");
                 byte[] raw = PcmAudio.DecodeBytes(tts.Data["pcm16"]);
-                if (raw != null && raw.Length > 0)
-                {
-                    var chunk = PcmAudio.FromEvent(tts);
-                    Assert.True(chunk != null && chunk.Samples.Length == raw.Length / 2, "有音频时可解码出采样");
-                }
+                Assert.True(raw != null && raw.Length > 1000, "语音库 wav 已生成，pcm16 应非空: " + (raw == null ? "null" : raw.Length + "B"));
+                bool riff = raw.Length >= 4 && raw[0] == (byte)'R' && raw[1] == (byte)'I' && raw[2] == (byte)'F' && raw[3] == (byte)'F';
+                Assert.True(!riff, "传输的是裸 PCM 而非 RIFF wav");
+                var chunk = PcmAudio.FromEvent(tts);
+                Assert.True(chunk != null && chunk.Samples.Length == raw.Length / 2, "可解码出采样");
+                float seconds = chunk.Samples.Length / (float)chunk.SampleRate;
+                Assert.True(seconds > 0.3f && seconds < 30f, "时长合理: " + seconds);
 
                 var delta = events.Last(e => e.Kind == "state_delta");
                 Assert.True(SimpleJson.GetFloat(delta.Data, "trust") >= 0f, "trust >= 0");
