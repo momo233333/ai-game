@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-tests:
+    name: Python 单测 + 对话回归
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 与开发机基线一致（开发进度.md §3）；方案锁定的 3.10 环境等 FunASR/S3 就位后再加进矩阵
+          python-version: "3.14"
+
+      - name: 语音库索引
+        run: python tools/voicelib_gen.py
+
+      - name: 单元测试
+        working-directory: ai-service
+        run: python -m unittest discover -s tests
+
+      - name: 对话回归（固定 rule 后端）
+        working-directory: ai-service
+        run: python tests/run_dialogue_regression.py
+
+      - name: 覆盖率
+        working-directory: ai-service
+        run: |
+          python -m pip install coverage
+          python -m coverage run --source=core,pipeline,server,cli,config -m unittest discover -s tests
+          python -m coverage run --append --source=core,pipeline,server,cli,config tests/run_dialogue_regression.py
+          python -m coverage report
+
+  unity-compile-check:
+    name: Unity 脚本无头编译（UnityEngine 桩）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: 编译 Assets/Scripts 全量
+        run: dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj" --nologo
+
+  unity-core-tests:
+    name: Unity Core 单测 + 真服务联调
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: 语音库索引
+        run: python tools/voicelib_gen.py
+
+      - name: Core 测试（含 JSON-TCP 端到端，服务不可用即失败）
+        run: dotnet run --project "unity/Tests~/CoreTests/CoreTests.csproj" -c Release -- --require-server
