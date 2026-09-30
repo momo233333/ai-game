@@ -33,7 +33,7 @@ AI_Game/
 │   ├── cli.py              # 命令行端到端原型（本地 / 远端 / --mic / --wav）
 │   ├── data/sensitive_words.txt
 │   ├── models/             # vosk 模型解压位置（模型需自行下载）
-│   └── tests/              # 259 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
+│   └── tests/              # 269 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
 ├── unity/                  # Unity 2022.3 工程（阶段 S6 骨架）
 │   ├── Assets/Scripts/
 │   │   ├── Core/           # ★ 纯 C#（无 UnityEngine）：JSON-TCP 会话、TurnEvent、
@@ -87,7 +87,7 @@ python server.py
 python cli.py --server 127.0.0.1:50051 --text "靠边停车"
 
 # 6) 测试
-python -m unittest discover -s tests      # 259 项单元测试（llama-server 不在线时 4 项 skip）
+python -m unittest discover -s tests      # 269 项单元测试（llama-server 不在线时 4 项 skip）
 python tests/run_dialogue_regression.py   # 44 项对话回归（方案 §6.2，固定 rule 后端）
 
 # 6) 覆盖率（需 pip install coverage）
@@ -125,7 +125,7 @@ dotnet build "unity/Tests~/UnityStubs/UnityCompileCheck.csproj"                 
 | TTS | GPT-SoVITS 实时合成 | 预生成语音库 → 字幕静默 | **voicelib（70 条 24k wav 已就位，真 PCM 下发）** |
 | 传输 | gRPC/protobuf | JSON-TCP（同事件结构） | **grpc**（`--transport json` 可回退） |
 
-装上依赖后无需改代码，`config.yaml` 里 `backend: auto` 会自动升级；也可显式指定并强制报错。
+装上依赖后无需改代码，`config.yaml` 里 `backend: auto` 会自动升级；也可显式指定并强制报错。真模型输出默认带 `response_format: json_schema` 结构化约束（`llm.json_schema: auto`，服务端不认时自动降级重试）。
 
 ## 开启 gRPC（方案正式传输层，**当前已接通**）
 
