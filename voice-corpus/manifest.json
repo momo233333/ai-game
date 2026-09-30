@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-09-27T19:02:06",
+  "generated_at": "2026-09-30T20:22:03",
   "source_csv": "voice-corpus\\lines.csv",
   "sample_rate": 24000,
   "items": [
@@ -12,7 +12,7 @@
         "TURN_LEFT"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L001.wav"
     },
     {
       "id": "L002",
@@ -22,7 +22,7 @@
         "TURN_LEFT"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L002.wav"
     },
     {
       "id": "L003",
@@ -32,7 +32,7 @@
         "TURN_LEFT"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L003.wav"
     },
     {
       "id": "L004",
@@ -42,7 +42,7 @@
         "TURN_LEFT"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L004.wav"
     },
     {
       "id": "L005",
@@ -52,7 +52,7 @@
         "TURN_LEFT"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L005.wav"
     },
     {
       "id": "L006",
@@ -62,7 +62,7 @@
         "TURN_RIGHT"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L006.wav"
     },
     {
       "id": "L007",
@@ -72,7 +72,7 @@
         "TURN_RIGHT"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L007.wav"
     },
     {
       "id": "L008",
@@ -82,7 +82,7 @@
         "TURN_RIGHT"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L008.wav"
     },
     {
       "id": "L009",
@@ -92,7 +92,7 @@
         "TURN_RIGHT"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L009.wav"
     },
     {
       "id": "L010",
@@ -102,7 +102,7 @@
         "TURN_RIGHT"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L010.wav"
     },
     {
       "id": "L011",
@@ -112,7 +112,7 @@
         "ACCELERATE"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L011.wav"
     },
     {
       "id": "L012",
@@ -122,7 +122,7 @@
         "ACCELERATE"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L012.wav"
     },
     {
       "id": "L013",
@@ -132,7 +132,7 @@
         "ACCELERATE"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L013.wav"
     },
     {
       "id": "L014",
@@ -142,7 +142,7 @@
         "ACCELERATE"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L014.wav"
     },
     {
       "id": "L015",
@@ -152,7 +152,7 @@
         "ACCELERATE"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L015.wav"
     },
     {
       "id": "L016",
@@ -162,7 +162,7 @@
         "BRAKE"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L016.wav"
     },
     {
       "id": "L017",
@@ -172,7 +172,7 @@
         "BRAKE"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L017.wav"
     },
     {
       "id": "L018",
@@ -182,7 +182,7 @@
         "BRAKE"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L018.wav"
     },
     {
       "id": "L019",
@@ -192,7 +192,7 @@
         "BRAKE"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L019.wav"
     },
     {
       "id": "L020",
@@ -202,7 +202,7 @@
         "BRAKE"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L020.wav"
     },
     {
       "id": "L021",
@@ -212,7 +212,7 @@
         "LANE_CHANGE"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L021.wav"
     },
     {
       "id": "L022",
@@ -222,7 +222,7 @@
         "LANE_CHANGE"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L022.wav"
     },
     {
       "id": "L023",
@@ -232,7 +232,7 @@
         "LANE_CHANGE"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L023.wav"
     },
     {
       "id": "L024",
@@ -242,7 +242,7 @@
         "LANE_CHANGE"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L024.wav"
     },
     {
       "id": "L025",
@@ -252,7 +252,7 @@
         "LANE_CHANGE"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L025.wav"
     },
     {
       "id": "L026",
@@ -262,7 +262,7 @@
         "PARK"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L026.wav"
     },
     {
       "id": "L027",
@@ -272,7 +272,7 @@
         "PARK"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L027.wav"
     },
     {
       "id": "L028",
@@ -282,7 +282,7 @@
         "PARK"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L028.wav"
     },
     {
       "id": "L029",
@@ -292,7 +292,7 @@
         "PARK"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L029.wav"
     },
     {
       "id": "L030",
@@ -302,7 +302,7 @@
         "PARK"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L030.wav"
     },
     {
       "id": "L031",
@@ -312,7 +312,7 @@
         "QUESTION_BACK"
       ],
       "priority": 80,
-      "wav_path": ""
+      "wav_path": "wavs/L031.wav"
     },
     {
       "id": "L032",
@@ -322,7 +322,7 @@
         "QUESTION_BACK"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L032.wav"
     },
     {
       "id": "L033",
@@ -332,7 +332,7 @@
         "QUESTION_BACK"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L033.wav"
     },
     {
       "id": "L034",
@@ -342,7 +342,7 @@
         "QUESTION_BACK"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L034.wav"
     },
     {
       "id": "L035",
@@ -352,7 +352,7 @@
         "QUESTION_BACK"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L035.wav"
     },
     {
       "id": "L036",
@@ -362,7 +362,7 @@
         "IGNORE"
       ],
       "priority": 90,
-      "wav_path": ""
+      "wav_path": "wavs/L036.wav"
     },
     {
       "id": "L037",
@@ -372,7 +372,7 @@
         "IGNORE"
       ],
       "priority": 85,
-      "wav_path": ""
+      "wav_path": "wavs/L037.wav"
     },
     {
       "id": "L038",
@@ -382,7 +382,7 @@
         "IGNORE"
       ],
       "priority": 85,
-      "wav_path": ""
+      "wav_path": "wavs/L038.wav"
     },
     {
       "id": "L039",
@@ -392,7 +392,7 @@
         "IGNORE"
       ],
       "priority": 80,
-      "wav_path": ""
+      "wav_path": "wavs/L039.wav"
     },
     {
       "id": "L040",
@@ -402,7 +402,7 @@
         "IGNORE"
       ],
       "priority": 80,
-      "wav_path": ""
+      "wav_path": "wavs/L040.wav"
     },
     {
       "id": "L041",
@@ -412,7 +412,7 @@
         "IGNORE"
       ],
       "priority": 70,
-      "wav_path": ""
+      "wav_path": "wavs/L041.wav"
     },
     {
       "id": "L042",
@@ -422,7 +422,7 @@
         "IGNORE"
       ],
       "priority": 65,
-      "wav_path": ""
+      "wav_path": "wavs/L042.wav"
     },
     {
       "id": "L043",
@@ -432,7 +432,7 @@
         "IGNORE"
       ],
       "priority": 60,
-      "wav_path": ""
+      "wav_path": "wavs/L043.wav"
     },
     {
       "id": "L044",
@@ -442,7 +442,7 @@
         "IGNORE"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L044.wav"
     },
     {
       "id": "L045",
@@ -452,7 +452,7 @@
         "IGNORE"
       ],
       "priority": 55,
-      "wav_path": ""
+      "wav_path": "wavs/L045.wav"
     },
     {
       "id": "L046",
@@ -462,7 +462,7 @@
         "IGNORE"
       ],
       "priority": 88,
-      "wav_path": ""
+      "wav_path": "wavs/L046.wav"
     },
     {
       "id": "L047",
@@ -472,7 +472,7 @@
         "IGNORE"
       ],
       "priority": 86,
-      "wav_path": ""
+      "wav_path": "wavs/L047.wav"
     },
     {
       "id": "L048",
@@ -482,7 +482,7 @@
         "IGNORE"
       ],
       "priority": 86,
-      "wav_path": ""
+      "wav_path": "wavs/L048.wav"
     },
     {
       "id": "L049",
@@ -492,7 +492,7 @@
         "IGNORE"
       ],
       "priority": 87,
-      "wav_path": ""
+      "wav_path": "wavs/L049.wav"
     },
     {
       "id": "L050",
@@ -502,7 +502,7 @@
         "IGNORE"
       ],
       "priority": 84,
-      "wav_path": ""
+      "wav_path": "wavs/L050.wav"
     },
     {
       "id": "L051",
@@ -512,7 +512,7 @@
         "IGNORE"
       ],
       "priority": 82,
-      "wav_path": ""
+      "wav_path": "wavs/L051.wav"
     },
     {
       "id": "L052",
@@ -522,7 +522,7 @@
         "IGNORE"
       ],
       "priority": 82,
-      "wav_path": ""
+      "wav_path": "wavs/L052.wav"
     },
     {
       "id": "L053",
@@ -532,7 +532,7 @@
         "IGNORE"
       ],
       "priority": 78,
-      "wav_path": ""
+      "wav_path": "wavs/L053.wav"
     },
     {
       "id": "L054",
@@ -542,7 +542,7 @@
         "TURN_LEFT"
       ],
       "priority": 58,
-      "wav_path": ""
+      "wav_path": "wavs/L054.wav"
     },
     {
       "id": "L055",
@@ -552,7 +552,7 @@
         "TURN_RIGHT"
       ],
       "priority": 58,
-      "wav_path": ""
+      "wav_path": "wavs/L055.wav"
     },
     {
       "id": "L056",
@@ -562,7 +562,7 @@
         "BRAKE"
       ],
       "priority": 68,
-      "wav_path": ""
+      "wav_path": "wavs/L056.wav"
     },
     {
       "id": "L057",
@@ -572,7 +572,7 @@
         "ACCELERATE"
       ],
       "priority": 58,
-      "wav_path": ""
+      "wav_path": "wavs/L057.wav"
     },
     {
       "id": "L058",
@@ -582,7 +582,7 @@
         "IGNORE"
       ],
       "priority": 64,
-      "wav_path": ""
+      "wav_path": "wavs/L058.wav"
     },
     {
       "id": "L059",
@@ -592,7 +592,7 @@
         "PARK"
       ],
       "priority": 58,
-      "wav_path": ""
+      "wav_path": "wavs/L059.wav"
     },
     {
       "id": "L060",
@@ -602,7 +602,7 @@
         "IGNORE"
       ],
       "priority": 66,
-      "wav_path": ""
+      "wav_path": "wavs/L060.wav"
     },
     {
       "id": "L061",
@@ -612,7 +612,7 @@
         "IGNORE"
       ],
       "priority": 54,
-      "wav_path": ""
+      "wav_path": "wavs/L061.wav"
     },
     {
       "id": "L062",
@@ -622,7 +622,7 @@
         "IGNORE"
       ],
       "priority": 52,
-      "wav_path": ""
+      "wav_path": "wavs/L062.wav"
     },
     {
       "id": "L063",
@@ -632,7 +632,7 @@
         "IGNORE"
       ],
       "priority": 62,
-      "wav_path": ""
+      "wav_path": "wavs/L063.wav"
     },
     {
       "id": "L064",
@@ -642,7 +642,7 @@
         "QUESTION_BACK"
       ],
       "priority": 63,
-      "wav_path": ""
+      "wav_path": "wavs/L064.wav"
     },
     {
       "id": "L065",
@@ -652,7 +652,7 @@
         "QUESTION_BACK"
       ],
       "priority": 62,
-      "wav_path": ""
+      "wav_path": "wavs/L065.wav"
     },
     {
       "id": "L066",
@@ -662,7 +662,7 @@
         "QUESTION_BACK"
       ],
       "priority": 66,
-      "wav_path": ""
+      "wav_path": "wavs/L066.wav"
     },
     {
       "id": "L067",
@@ -672,7 +672,7 @@
         "TURN_LEFT"
       ],
       "priority": 62,
-      "wav_path": ""
+      "wav_path": "wavs/L067.wav"
     },
     {
       "id": "L068",
@@ -682,7 +682,7 @@
         "BRAKE"
       ],
       "priority": 61,
-      "wav_path": ""
+      "wav_path": "wavs/L068.wav"
     },
     {
       "id": "L069",
@@ -692,7 +692,7 @@
         "BRAKE"
       ],
       "priority": 57,
-      "wav_path": ""
+      "wav_path": "wavs/L069.wav"
     },
     {
       "id": "L070",
@@ -702,7 +702,7 @@
         "IGNORE"
       ],
       "priority": 64,
-      "wav_path": ""
+      "wav_path": "wavs/L070.wav"
     }
   ]
 }

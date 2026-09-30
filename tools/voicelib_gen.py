@@ -22,7 +22,9 @@ def build_manifest(csv_path: str, wav_dir: str | None, output: str) -> dict:
             if wav_dir:
                 candidate = os.path.join(wav_dir, f"{line_id}.wav")
                 if os.path.exists(candidate):
-                    wav_path = os.path.relpath(candidate, os.path.dirname(os.path.abspath(output)))
+                    # 统一用正斜杠入库：manifest 是提交进 git 的跨平台数据
+                    rel = os.path.relpath(candidate, os.path.dirname(os.path.abspath(output)))
+                    wav_path = rel.replace(os.sep, "/")
             items.append(
                 {
                     "id": line_id,
@@ -49,13 +51,22 @@ def build_manifest(csv_path: str, wav_dir: str | None, output: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="从台词语料生成 TTS 语音库 manifest")
     parser.add_argument("--csv", default=os.path.join(ROOT, "voice-corpus", "lines.csv"))
-    parser.add_argument("--wav-dir", default=None, help="预生成 wav 所在目录（可选）")
+    parser.add_argument(
+        "--wav-dir",
+        default=None,
+        help="预生成 wav 所在目录（默认自动探测 voice-corpus/wavs）",
+    )
     parser.add_argument("--out", default=os.path.join(ROOT, "voice-corpus", "manifest.json"))
     args = parser.parse_args(argv)
     if not os.path.exists(args.csv):
         print(f"csv not found: {args.csv}", file=sys.stderr)
         return 1
-    manifest = build_manifest(args.csv, args.wav_dir, args.out)
+    wav_dir = args.wav_dir
+    if wav_dir is None:
+        auto = os.path.join(ROOT, "voice-corpus", "wavs")
+        if os.path.isdir(auto):
+            wav_dir = auto
+    manifest = build_manifest(args.csv, wav_dir, args.out)
     hit = sum(1 for item in manifest["items"] if item["wav_path"])
     print(f"[voicelib] {len(manifest['items'])} lines -> {args.out} (wav ready: {hit})")
     return 0
