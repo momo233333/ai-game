@@ -33,7 +33,7 @@ AI_Game/
 │   ├── cli.py              # 命令行端到端原型（本地 / 远端 / --mic / --wav）
 │   ├── data/sensitive_words.txt
 │   ├── models/             # vosk 模型解压位置（模型需自行下载）
-│   └── tests/              # 223 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
+│   └── tests/              # 259 项单元测试（含 4 项真模型冒烟）+ 44 项对话回归 + samples/ 语音样本
 ├── unity/                  # Unity 2022.3 工程（阶段 S6 骨架）
 │   ├── Assets/Scripts/
 │   │   ├── Core/           # ★ 纯 C#（无 UnityEngine）：JSON-TCP 会话、TurnEvent、
@@ -87,7 +87,7 @@ python server.py
 python cli.py --server 127.0.0.1:50051 --text "靠边停车"
 
 # 6) 测试
-python -m unittest discover -s tests      # 223 项单元测试（llama-server 不在线时 4 项 skip）
+python -m unittest discover -s tests      # 259 项单元测试（llama-server 不在线时 4 项 skip）
 python tests/run_dialogue_regression.py   # 44 项对话回归（方案 §6.2，固定 rule 后端）
 
 # 6) 覆盖率（需 pip install coverage）
