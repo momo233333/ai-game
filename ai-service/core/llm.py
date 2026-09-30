@@ -3,15 +3,58 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from typing import Any, Iterator
 
 from .corpus import Corpus
-from .types import GameState, Intent
+from .types import ALLOWED_INTENTS, GameState, Intent
 
 OUTPUT_KEY_ORDER = ["action", "tts_hint", "reply", "trust_delta"]
+
+# OpenAI response_format 的 JSON Schema：把模型输出锁进协议结构
+# （intent 枚举、数值域、只允许这四个顶层键），根治裸 URI / 夹话 / 双对象坏输出。
+LLM_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "action": {
+            "type": "object",
+            "properties": {
+                "intent": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
+                "steering": {"type": "number", "minimum": -1, "maximum": 1},
+                "throttle": {"type": "number", "minimum": 0, "maximum": 1},
+                "brake": {"type": "number", "minimum": 0, "maximum": 1},
+                "hold_ms": {"type": "integer", "minimum": 0},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            },
+            "required": ["intent", "steering", "throttle", "brake", "hold_ms"],
+            "additionalProperties": False,
+        },
+        "tts_hint": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "reply": {"type": "string"},
+        "trust_delta": {"type": "integer"},
+    },
+    "required": list(OUTPUT_KEY_ORDER),
+    "additionalProperties": False,
+}
+
+
+def build_response_format(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    """按 `llm.json_schema` 配置生成 OpenAI response_format 载荷（on/off/auto）。
+
+    返回 None 表示不带结构化约束（off）；on 与 auto 都发送 json_schema，
+    服务端不认时由 OpenAICompatBackend 自动降级重试。
+    """
+    mode = str(cfg.get("json_schema", "auto")).strip().lower()
+    if mode in ("off", "false", "0", "none"):
+        return None
+    return {
+        "type": "json_schema",
+        "json_schema": {"name": "copilot_reply", "schema": LLM_JSON_SCHEMA, "strict": False},
+    }
+
 
 
 def _result(action: dict, tts_hint: str | None, reply: str, trust_delta: int) -> dict:
@@ -201,6 +244,8 @@ class OpenAICompatBackend(LLMBackend):
         self.model = cfg.get("openai_model", "qwen2.5-7b-instruct")
         self.system_prompt = system_prompt
         self.max_reply_chars = int(cfg.get("max_reply_chars", 40))
+        self.json_schema_cfg = dict(cfg)
+        self.schema_degraded = False
 
     @staticmethod
     def is_available(base_url: str, timeout: float = 1.0) -> bool:
@@ -209,6 +254,16 @@ class OpenAICompatBackend(LLMBackend):
                 return resp.status == 200
         except (urllib.error.URLError, OSError, ValueError):
             return False
+
+    def _post(self, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
+        req = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
 
     def generate(self, ctx: dict[str, Any]) -> dict[str, Any]:
         payload = {
@@ -220,14 +275,23 @@ class OpenAICompatBackend(LLMBackend):
             "temperature": 0.6,
             "max_tokens": 256,
         }
-        req = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        response_format = build_response_format(self.json_schema_cfg)
+        if response_format is not None:
+            payload["response_format"] = response_format
+            try:
+                data = self._post(payload, 60)
+            except urllib.error.HTTPError as exc:
+                # 老版本 llama-server 不认 json_schema：去掉约束重试一次（自动降级）
+                payload.pop("response_format", None)
+                self.schema_degraded = True
+                print(
+                    f"[llm] json_schema response_format 被服务端拒绝（HTTP {exc.code}），"
+                    "降级为无结构化约束重试；可用 llm.json_schema: off 显式关闭",
+                    file=sys.stderr,
+                )
+                data = self._post(payload, 60)
+        else:
+            data = self._post(payload, 60)
         text = data["choices"][0]["message"]["content"]
         return sanitize_output(parse_llm_json(text), ctx)
 

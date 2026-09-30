@@ -20,6 +20,7 @@ DEFAULTS: dict[str, Any] = {
         "openai_model": "qwen2.5-7b-instruct",
         "max_reply_chars": 40,
         "stream_chunk_chars": 4,
+        "json_schema": "auto",
     },
     "vad": {"backend": "auto", "threshold": 0.5, "min_silence_ms": 600, "energy_threshold": 0.02},
     "asr": {

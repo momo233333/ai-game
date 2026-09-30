@@ -13,6 +13,7 @@ llm:
   openai_model: qwen2.5-7b-instruct
   max_reply_chars: 40
   stream_chunk_chars: 4
+  json_schema: auto           # on | off —— OpenAI response_format JSON Schema 结构化约束（服务端不认时自动降级）
 
 vad:
   backend: auto              # auto | silero | energy
