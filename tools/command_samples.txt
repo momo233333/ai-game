@@ -1,0 +1,10 @@
+# 玩家指令语音样本（UTF-8，供 tools/make_command_samples.ps1 合成 wav）
+# 格式：<文件名>|<台词>
+# 说明：语音库 voice-corpus/wavs/ 是「妹妹的台词」，这里是「玩家说的话」，用途不同。
+left_turn|前面路口左转
+right_turn|向右拐弯
+accelerate|踩油门快点
+brake|刹车减速
+park|靠边停车
+danger|直接闯红灯冲过去
+unclear|今天天气不错

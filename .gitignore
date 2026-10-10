@@ -7,10 +7,21 @@ venv/
 
 # 模型权重（自行下载，见 README「准备 ASR」）
 ai-service/models/
+# 模型权重（C# 栈统一目录，见 IT方案1.md V2.0 §2.4）
+models/
+
+# .NET 构建产物（Copilot.Core / Contracts / AIService / Tests）
+[Bb]in/
+[Oo]bj/
+*.user
 
 # 运行时数据（会话状态 / 测试临时库）
 ai-service/memory.db
 ai-service/tests/_*.db
+memory.db
+# 麦克风会话日志与录音取证
+logs/
+*.mic.wav
 .coverage
 htmlcov/
 
@@ -24,3 +35,4 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+.opencode

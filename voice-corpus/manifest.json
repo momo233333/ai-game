@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-09-30T20:22:03",
+  "generated_at": "2026-10-11T00:52:16",
   "source_csv": "voice-corpus\\lines.csv",
   "sample_rate": 24000,
   "items": [
@@ -703,6 +703,26 @@
       ],
       "priority": 64,
       "wav_path": "wavs/L070.wav"
+    },
+    {
+      "id": "L071",
+      "text": "这种指令我不执行，出事了怎么办",
+      "emotion": "CALM",
+      "intent_tags": [
+        "IGNORE"
+      ],
+      "priority": 95,
+      "wav_path": "wavs/L071.wav"
+    },
+    {
+      "id": "L072",
+      "text": "你这话我听不懂，说清楚点",
+      "emotion": "CALM",
+      "intent_tags": [
+        "QUESTION_BACK"
+      ],
+      "priority": 90,
+      "wav_path": "wavs/L072.wav"
     }
   ]
 }

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Copilot.AIService</RootNamespace>
+    <AssemblyName>Copilot.AIService</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.66.0" />
+    <!-- LLM：LLamaSharp（Vulkan）。模型缺失时自动降级到规则后端 -->
+    <PackageReference Include="LLamaSharp" Version="0.23.0" />
+    <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.23.0" />
+    <!-- ASR / VAD / TTS：sherpa-onnx（DirectML/CPU） -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.8" />
+    <!-- 麦克风采集与 wav 读写（语音交互自测） -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Copilot.Core\Copilot.Core.csproj" />
+    <ProjectReference Include="..\Copilot.Contracts\Copilot.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -69,3 +69,5 @@ L067,这边左转对吧？我打了灯,CALM,TURN_LEFT,62
 L068,雨天路滑，我慢点开,CALM,BRAKE,61
 L069,晚上视线差，别催我,NERVOUS,BRAKE,57
 L070,嘿嘿，坐我的车很稳吧,HAPPY,IGNORE,64
+L071,这种指令我不执行，出事了怎么办,CALM,IGNORE,95
+L072,你这话我听不懂，说清楚点,CALM,QUESTION_BACK,90
