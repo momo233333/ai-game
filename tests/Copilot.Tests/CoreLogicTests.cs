@@ -325,7 +325,7 @@ public class LlmJsonTests
 
         Assert.Equal("voicelib://L001", s.TtsHint);
         Assert.NotEqual("voicelib://L001", s.Reply);
-        Assert.Equal("行，左转交给我", s.Reply);
+        Assert.Equal("好，左转……我看着点后视镜", s.Reply);
     }
 
     [Fact]

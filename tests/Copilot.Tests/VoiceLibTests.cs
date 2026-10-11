@@ -10,7 +10,7 @@ public class VoiceLibTests
     {
         var lib = TestPaths.LoadVoiceLib();
 
-        Assert.Equal(72, lib.Items.Count);
+        Assert.Equal(68, lib.Items.Count);
         Assert.Equal(24000, lib.SampleRate);
         Assert.All(lib.Items, e => Assert.NotNull(e.AbsoluteWavPath));
     }
@@ -20,13 +20,13 @@ public class VoiceLibTests
     {
         var entry = TestPaths.LoadVoiceLib().FindById("L001");
         Assert.NotNull(entry);
-        Assert.Equal("行，左转交给我", entry!.Text);
+        Assert.Equal("好，左转……我看着点后视镜", entry!.Text);
     }
 
     [Fact]
     public void 按文本精确匹配()
     {
-        var entry = TestPaths.LoadVoiceLib().FindByText("行，左转交给我");
+        var entry = TestPaths.LoadVoiceLib().FindByText("好，左转……我看着点后视镜");
         Assert.Equal("L001", entry?.Id);
     }
 

@@ -19,7 +19,11 @@ namespace Copilot.Core
     /// </summary>
     public sealed class TurnPipeline
     {
-        private const string RejectLine = "啧，别说这个，好好开车。";
+        /// <summary>
+        /// 输入层命中敏感词时，学员说的那句（不进 LLM）。
+        /// 语气随《驾考宝典》人设走 —— 她是刚上车的学生，不是老司机。
+        /// </summary>
+        private const string RejectLine = "教练……你别说这种话啦，我在开车呢。";
 
         private readonly ILlmBackend _llm;
         private readonly TtsRouter _tts;

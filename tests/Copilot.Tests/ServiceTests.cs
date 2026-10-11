@@ -33,7 +33,7 @@ public class ConfigTests
     {
         var config = Config.Load();
 
-        Assert.Equal(72, VoiceLib.Load(config.ResolvePath(config.Tts.VoicelibManifest)).Items.Count);
+        Assert.Equal(68, VoiceLib.Load(config.ResolvePath(config.Tts.VoicelibManifest)).Items.Count);
         Assert.Equal(8, SafetyFilter.FromFile(config.ResolvePath(config.Safety.WordsFile)).Count);
     }
 
@@ -73,7 +73,7 @@ public class ProtoMapperTests
     [Fact]
     public void 事件映射_音频带采样率与语音库标志()
     {
-        var ev = Core.TurnEvent.Tts(new byte[] { 1, 2, 3, 4 }, 24000, true, "行，左转交给我");
+        var ev = Core.TurnEvent.Tts(new byte[] { 1, 2, 3, 4 }, 24000, true, "好，左转……我看着点后视镜");
 
         var proto = ProtoMapper.ToProto(ev);
 
@@ -144,7 +144,7 @@ public class AiRuntimeTests
         Assert.Equal("rule", runtime.Llm.Name);
         Assert.Equal("voicelib", runtime.Tts.Name);
         Assert.Null(runtime.Asr);
-        Assert.Equal(72, runtime.VoiceLib.Items.Count);
+        Assert.Equal(68, runtime.VoiceLib.Items.Count);
         Assert.Equal(8, runtime.Safety.Count);
     }
 

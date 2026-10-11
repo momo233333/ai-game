@@ -26,7 +26,7 @@ Unity 主进程 (C#)  ──gRPC-Web/HTTP1.1(localhost:50051)──►  AI 伴�
 | LLM | LLamaSharp + Vulkan（Qwen2.5-7B GGUF） | 规则引擎 | ✅ **llamasharp**（~100 tok/s，**GBNF 约束解码**） |
 | ASR | sherpa-onnx 流式 paraformer | 不可用 | ✅ **sherpa-onnx**（int8/CPU，**partial 字幕**） |
 | VAD | Silero（sherpa-onnx） | 能量阈值 | ✅ **silero**（7/7 样本恰好 1 次句尾） |
-| TTS | 预生成语音库（~0ms） | sherpa-onnx VITS 实时合成 → 纯字幕 | **voicelib**（72 条真 wav，带防重复轮换）；VITS 未装 |
+| TTS | 预生成语音库（~0ms） | sherpa-onnx VITS 实时合成 → 纯字幕 | **voicelib**（68 条真 wav，带防重复轮换）；VITS 未装 |
 | 传输 | gRPC | — | ✅ **grpc**（localhost:50051） |
 
 任一环节缺失都不影响启动：清空 `models/` 即退回 `规则引擎 + 语音库`，CLI 与全部测试照常可用。
@@ -47,7 +47,7 @@ ai-game/
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
 ├── data/sensitive_words.txt    # 共享敏感词表
-├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（72 条 24kHz）
+├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（68 条 24kHz）
 ├── tools/                      # fetch_models.ps1 / make_command_samples.ps1 / build_unity_plugins.ps1
 │                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
 ├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC-Web
