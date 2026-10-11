@@ -25,6 +25,10 @@ namespace Copilot.Vehicle
         [Header("配置")]
         public VehiclePhysicsProfile profile;
 
+        [Header("倒车")]
+        [Tooltip("倒车最高速度（倒车不该飚起来）")]
+        public float reverseMaxSpeedKmh = 30f;
+
         Rigidbody _body;
         float _steer;
         float _throttle;
@@ -74,11 +78,11 @@ namespace Copilot.Vehicle
             }
         }
 
-        /// <summary>ActionExecutor 每 FixedUpdate 调用一次。</summary>
+        /// <summary>ActionExecutor 每 FixedUpdate 调用一次。<paramref name="throttle"/> 为负表示**倒车**。</summary>
         public void ApplyInput(float steering, float throttle, float brake)
         {
             _steer = Mathf.Clamp(steering, -1f, 1f);
-            _throttle = Mathf.Clamp01(throttle);
+            _throttle = Mathf.Clamp(throttle, -1f, 1f);   // 负 = 倒车（见 Intents.Reverse）
             _brake = Mathf.Clamp01(brake);
 
             float maxSteer = profile != null ? profile.maxSteerAngle : 32f;
@@ -90,10 +94,15 @@ namespace Copilot.Vehicle
             if (wheelFrontRight != null) wheelFrontRight.steerAngle = targetAngle;
 
             float speedKmh = SpeedKmh;
-            float maxSpeed = profile != null ? profile.maxSpeedKmh : 140f;
+            bool reversing = _throttle < 0f;
+            float maxSpeed = reversing
+                ? reverseMaxSpeedKmh
+                : (profile != null ? profile.maxSpeedKmh : 140f);
             float speedFactor = speedKmh >= maxSpeed ? 0f : 1f;
 
-            float torque = Evaluate(profile != null ? profile.throttleCurve : null, _throttle) * motor * speedFactor;
+            float magnitude = Evaluate(profile != null ? profile.throttleCurve : null, Mathf.Abs(_throttle))
+                              * motor * speedFactor;
+            float torque = reversing ? -magnitude : magnitude;
             if (wheelRearLeft != null) wheelRearLeft.motorTorque = torque;
             if (wheelRearRight != null) wheelRearRight.motorTorque = torque;
 

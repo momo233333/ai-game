@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-10-11T16:11:36",
+  "generated_at": "2026-10-11T16:33:54",
   "source_csv": "voice-corpus\\lines.csv",
   "sample_rate": 24000,
   "items": [
@@ -683,6 +683,36 @@
       ],
       "priority": 57,
       "wav_path": "wavs/L068.wav"
+    },
+    {
+      "id": "L069",
+      "text": "倒车我会！我模拟器上倒库满分",
+      "emotion": "HAPPY",
+      "intent_tags": [
+        "REVERSE"
+      ],
+      "priority": 72,
+      "wav_path": "wavs/L069.wav"
+    },
+    {
+      "id": "L070",
+      "text": "倒车……我、我倒车不太熟啊",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "REVERSE"
+      ],
+      "priority": 70,
+      "wav_path": "wavs/L070.wav"
+    },
+    {
+      "id": "L071",
+      "text": "好，我挂倒挡，慢慢往后倒",
+      "emotion": "CALM",
+      "intent_tags": [
+        "REVERSE"
+      ],
+      "priority": 66,
+      "wav_path": "wavs/L071.wav"
     }
   ]
 }

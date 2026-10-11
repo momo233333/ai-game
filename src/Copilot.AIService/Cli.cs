@@ -603,6 +603,7 @@ public static class Cli
         Intents.Brake => "⏹刹车",
         Intents.LaneChange => "⇄变道",
         Intents.Park => "⏸停车",
+        Intents.Reverse => "↩倒车",
         Intents.Ignore => "✖拒绝",
         Intents.QuestionBack => "？反问",
         _ => intent,

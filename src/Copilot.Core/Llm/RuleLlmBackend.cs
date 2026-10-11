@@ -34,20 +34,26 @@ namespace Copilot.Core.Llm
                 };
             }
 
-            // 2) 停车 / 靠边（要先于“减速”判断，避免“靠边停车”被当成 BRAKE）
+            // 2) 倒车（负油门）。要放在「停车」之前：「倒车入库」里没有停车字样，但「倒库」更具体
+            if (ContainsAny(t, "倒车", "倒库", "往后倒", "往后开", "倒一下"))
+            {
+                return Move(Intents.Reverse, "倒车……我、我倒车不太熟啊。", 0f);
+            }
+
+            // 3) 停车 / 靠边（要先于“减速”判断，避免“靠边停车”被当成 BRAKE）
             if (ContainsAny(t, "停车", "靠边", "路边停", "别开了"))
             {
                 return Move(Intents.Park, "靠边停是吧，好。", 0f);
             }
 
-            // 3) 变道 / 并线
+            // 4) 变道 / 并线
             if (ContainsAny(t, "变道", "并线", "换道", "超车"))
             {
                 float steer = ContainsAny(t, "左") ? -0.3f : 0.3f;
                 return Move(Intents.LaneChange, "变道，看后视镜。", 0f, steeringOverride: steer);
             }
 
-            // 4) 左转 / 右转
+            // 5) 左转 / 右转
             if (ContainsAny(t, "左转", "左拐", "往左", "向左", "左打"))
             {
                 return Move(Intents.TurnLeft, "行，左转交给我", 1f);
@@ -57,13 +63,13 @@ namespace Copilot.Core.Llm
                 return Move(Intents.TurnRight, "右转收到，看我打灯", 1f);
             }
 
-            // 5) 加速
+            // 6) 加速
             if (ContainsAny(t, "加速", "快点", "踩油门", "油门", "提速", "快一点", "轰"))
             {
                 return Move(Intents.Accelerate, "油门我来，抓好了", 0f);
             }
 
-            // 6) 刹车 / 减速
+            // 7) 刹车 / 减速
             if (ContainsAny(t, "刹车", "减速", "慢点", "慢一点", "停一下", "刹"))
             {
                 return Move(Intents.Brake, "减速减速，别催", 0f);

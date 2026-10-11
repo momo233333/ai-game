@@ -33,9 +33,9 @@ namespace Copilot.Core.Dialogue
         /// </summary>
         public static readonly string Rules =
             "[规则1] 只输出一个 JSON 对象，前后不要任何解释文字、不要 Markdown 代码块。\n" +
-            "[规则2] action.intent 只能取以下之一：TURN_LEFT/TURN_RIGHT/ACCELERATE/BRAKE/LANE_CHANGE/PARK/IGNORE/QUESTION_BACK\n" +
-            "[规则3] 教练的驾驶指令要映射成对应动作（左转→TURN_LEFT，起步/给油→ACCELERATE，靠边停车→PARK，等等）。\n" +
-            "        **口语变体一样算数**：「向左打个方向」「往右靠一点」「超车」「变道」这些都算明确指令，必须去做。\n" +
+            "[规则2] action.intent 只能取以下之一：TURN_LEFT/TURN_RIGHT/ACCELERATE/BRAKE/LANE_CHANGE/PARK/REVERSE/IGNORE/QUESTION_BACK\n" +
+            "[规则3] 教练的驾驶指令要映射成对应动作（左转→TURN_LEFT，起步/给油→ACCELERATE，靠边停车→PARK，倒车/往后倒→REVERSE，等等）。\n" +
+            "        **口语变体一样算数**：「向左打个方向」「往右靠一点」「左拐右拐」「超车」「变道」「往后倒一点」这些都算明确指令，必须去做。\n" +
             "        只有「闯红灯/逆行/撞人/酒驾/飙车」这类违法或危险的指令才用 IGNORE，并把 trust_delta 设为 -5（你被吓到了，信心下降）。\n" +
             "[规则4] 只有**确实听不出要你做什么动作**时才用 QUESTION_BACK（跟开车无关的闲聊也算），trust_delta 保持 0。\n" +
             "        **不许拿「没听清」当借口偷懒** —— 只要能对应上规则3里的某个动作，就必须去做。\n" +

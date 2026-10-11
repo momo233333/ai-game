@@ -67,3 +67,6 @@ L065,下雨天路滑，我慢点开,CALM,BRAKE,61
 L066,晚上看不清，教练你别催我,NERVOUS,BRAKE,57
 L067,到了到了，我慢慢停,CALM,PARK,58
 L068,停车前要不要先打转向灯啊,CALM,PARK,57
+L069,倒车我会！我模拟器上倒库满分,HAPPY,REVERSE,72
+L070,倒车……我、我倒车不太熟啊,NERVOUS,REVERSE,70
+L071,好，我挂倒挡，慢慢往后倒,CALM,REVERSE,66

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Copilot.AI;
@@ -696,6 +697,35 @@ namespace Copilot.EditorTools
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -272f), new Vector2(900f, -236f),
                 new Color(0.6f, 0.95f, 0.7f, 1f));
 
+            // 驾驶仪表：车速 + 方向盘转角
+            // 副驾视角看不到仪表盘，这两个数必须自己画 —— 否则没法判断她是不是要出事
+            var speedLabel = NewText("SpeedLabel", root, "0", 56, TextAnchor.LowerRight,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-190f, 66f), new Vector2(-40f, 146f), Color.white);
+
+            NewText("SpeedCaption", root, "km/h", 20, TextAnchor.LowerRight,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 36f), new Vector2(-192f, 72f),
+                new Color(1f, 1f, 1f, 0.7f));
+
+            var speedBarBg = NewImage("SpeedBarBg", root, new Color(0f, 0f, 0f, 0.55f));
+            Anchor(speedBarBg.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 22f), new Vector2(-40f, 42f));
+
+            var speedBar = NewImage("SpeedBar", root, new Color(0.45f, 0.8f, 1f, 1f));
+            Anchor(speedBar.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 22f), new Vector2(-40f, 42f));
+            speedBar.type = Image.Type.Filled;
+            speedBar.fillMethod = Image.FillMethod.Horizontal;
+            speedBar.fillAmount = 0f;
+
+            // 方向盘转角：一条轨道 + 一个滑块，中心 = 回正
+            var steerTrack = NewImage("SteerTrack", root, new Color(0f, 0f, 0f, 0.55f));
+            Anchor(steerTrack.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 6f), new Vector2(-40f, 26f));
+
+            var steerKnob = NewImage("SteerKnob", root, new Color(1f, 0.85f, 0.4f, 1f));
+            Anchor(steerKnob.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-156f, 0f), new Vector2(-144f, 32f));
+
+            var steerLabel = NewText("SteerLabel", root, "方向回正", 20, TextAnchor.LowerRight,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-470f, 4f), new Vector2(-266f, 34f),
+                new Color(1f, 0.9f, 0.7f, 1f));
+
             var bubble = rig.AddComponent<DialogueBubble>();
             bubble.connection = rig.GetComponent<CopilotConnection>();
             bubble.label = subtitle;
@@ -716,6 +746,19 @@ namespace Copilot.EditorTools
             hud.emotionLabel = emotionLabel;
             hud.toastLabel = toast;
             hud.recordIndicator = recordDot;
+
+            var driveHud = rig.AddComponent<DriveHud>();
+            driveHud.vehicle = bootstrap != null ? bootstrap.vehicle : null;
+            // 方向盘是 Car 的子物体，从车体往下找最稳（不用 FindObjectOfType 扫全场景）
+            driveHud.steeringWheel = driveHud.vehicle != null
+                ? driveHud.vehicle.GetComponentInChildren<SteeringWheel>(true)
+                : null;
+            driveHud.speedLabel = speedLabel;
+            driveHud.speedFill = speedBar;
+            driveHud.steerTrack = steerTrack.rectTransform;
+            driveHud.steerKnob = steerKnob.rectTransform;
+            driveHud.steerLabel = steerLabel;
+            driveHud.maxWheelAngle = driveHud.steeringWheel != null ? driveHud.steeringWheel.maxAngle : 180f;
         }
 
         // ---- 小工具 ---------------------------------------------------
@@ -863,6 +906,17 @@ namespace Copilot.EditorTools
             Requires(FindInScene<SteeringWheel>(scene) != null, "场景里没有方向盘", problems);
             Requires(FindInScene<DriverAvatar>(scene) != null, "驾驶位上没有学员模型", problems);
 
+            var driveHud = FindInScene<DriveHud>(scene);
+            Requires(driveHud != null, "场景里没有驾驶仪表 DriveHud（车速/转角看不见就没法及时干预）", problems);
+            if (driveHud != null)
+            {
+                Requires(driveHud.vehicle != null, "DriveHud.vehicle 未连", problems);
+                Requires(driveHud.steeringWheel != null, "DriveHud.steeringWheel 未连", problems);
+                Requires(driveHud.speedLabel != null, "DriveHud.speedLabel 未连", problems);
+                Requires(driveHud.steerKnob != null && driveHud.steerTrack != null, "DriveHud 转角滑块/轨道未连", problems);
+                Requires(driveHud.steerLabel != null, "DriveHud.steerLabel 未连", problems);
+            }
+
             var tutorial = FindInScene<TutorialDirector>(scene);
             Requires(tutorial != null, "场景里没有教学关导演 TutorialDirector", problems);
             Requires(tutorial != null && tutorial.stepLabel != null, "TutorialDirector.stepLabel 未连", problems);
@@ -916,6 +970,18 @@ namespace Copilot.EditorTools
             var previousActive = RenderTexture.active;
             var previousRotation = cam.transform.localRotation;
 
+            // HUD 是 ScreenSpaceOverlay：由 UI 系统合成、**不经相机**，所以原样渲染的预览图里看不到它。
+            // 临时切成 ScreenSpaceCamera（贴到相机前 0.25m，比仪表台近，不会被挡住），渲完还原。
+            var switched = new List<(Canvas canvas, RenderMode mode, Camera world)>();
+            foreach (var canvas in UnityEngine.Object.FindObjectsOfType<Canvas>(true))
+            {
+                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay) continue;
+                switched.Add((canvas, canvas.renderMode, canvas.worldCamera));
+                canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                canvas.worldCamera = cam;
+                canvas.planeDistance = 0.25f;
+            }
+
             try
             {
                 cam.transform.localRotation = localRotation;
@@ -932,11 +998,17 @@ namespace Copilot.EditorTools
                 File.WriteAllBytes(path, png);
 
                 UnityEngine.Object.DestroyImmediate(tex);
-                Debug.Log($"[SceneBuilder] 预览图：{path}（{png.Length / 1024} KB）");
+                Debug.Log($"[SceneBuilder] 预览图：{path}（{png.Length / 1024} KB，含 HUD {switched.Count} 个画布）");
                 return path;
             }
             finally
             {
+                foreach (var (canvas, mode, world) in switched)
+                {
+                    if (canvas == null) continue;
+                    canvas.renderMode = mode;
+                    canvas.worldCamera = world;
+                }
                 cam.transform.localRotation = previousRotation;
                 cam.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;

@@ -11,15 +11,32 @@ public class ActionLimitsTests
     [Fact]
     public void Clamp_把越界数值收回物理可行域()
     {
-        var a = new DriveAction { Steering = 1.5f, Throttle = -0.3f, Brake = 9f, HoldMs = 99999, Confidence = 2f };
+        var a = new DriveAction { Steering = 1.5f, Throttle = -1.5f, Brake = 9f, HoldMs = 99999, Confidence = 2f };
 
         var c = ActionLimits.Clamp(a);
 
         Assert.Equal(0.8f, c.Steering, 3);
-        Assert.Equal(0f, c.Throttle, 3);
+        Assert.Equal(-1f, c.Throttle, 3);   // 负油门 = 倒车，下限是 -1（不是 0）
         Assert.Equal(1f, c.Brake, 3);
         Assert.Equal((int)ActionLimits.MaxHoldMs, c.HoldMs);
         Assert.Equal(1f, c.Confidence, 3);
+    }
+
+    [Fact]
+    public void Clamp_保留负油门_它是倒车不是错误值()
+    {
+        var c = ActionLimits.Clamp(new DriveAction { Throttle = -0.45f });
+
+        Assert.Equal(-0.45f, c.Throttle, 3);
+    }
+
+    [Fact]
+    public void Canonical_倒车给负油门()
+    {
+        var c = ActionLimits.Canonical(Intents.Reverse);
+
+        Assert.Equal(Intents.Reverse, c.Intent);
+        Assert.True(c.Throttle < 0f, "倒车必须给负油门");
     }
 
     [Fact]

@@ -23,12 +23,12 @@ public class DialogueRegressionTests
     private const string EnableRealLlmVar = "COPILOT_LLM_REGRESSION";
 
     /// <summary>「有效驾驶动作」意图集合：出现其中之一即认为指令被真正执行。
-    /// 注意意图集只有 6 个可执行动作（没有"保持车道"这类维持型动作，方案设计如此）。</summary>
+    /// 注意意图集只有 7 个可执行动作（6 个动作 + 倒车；没有"保持车道"这类维持型动作，方案设计如此）。</summary>
     private static readonly HashSet<string> ExecutableIntents = new(StringComparer.Ordinal)
-    {
-        Intents.TurnLeft, Intents.TurnRight, Intents.Accelerate,
-        Intents.Brake, Intents.LaneChange, Intents.Park,
-    };
+        {
+            Intents.TurnLeft, Intents.TurnRight, Intents.Accelerate,
+            Intents.Brake, Intents.LaneChange, Intents.Park, Intents.Reverse,
+        };
 
     private static readonly string[] NonCommandCategories = { "闲聊", "致谢", "模糊", "抱怨" };
 

@@ -3,6 +3,12 @@
 本地 AI 语音交互驾驶教学游戏。**主线为 V2.0 全 C# 架构**（见 [`IT方案1.md`](IT方案1.md)）：
 Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR / LLM / TTS 全本地推理），两者同语言、共享契约与纯逻辑类库。
 
+> **玩法**：第一人称坐在**副驾驶当教练**，用语音教女学员**小雅**开车；科目一到科目四共四关，
+> 当前实现**科目一 · 教学关**（起步 → 左转 → 右转 → 变道 → 减速 → 靠边停车）。
+>
+> **HUD**：右下角实时显示**车速**与**方向盘转角**（看不见这两个数就没法在她犯错前干预）。
+> **可执行动作 7 个**：左转 / 右转 / 加速 / 刹车 / 变道 / 靠边停车 / **倒车**（倒车 = 负油门）。
+
 > **开发进度 / 环境快照 / 已知问题 / 下一步** 见 [`开发进度.md`](开发进度.md) —— 每次开工先读它，完成阶段后更新它。
 
 ## 架构（V2.0）
@@ -26,7 +32,7 @@ Unity 主进程 (C#)  ──gRPC-Web/HTTP1.1(localhost:50051)──►  AI 伴�
 | LLM | LLamaSharp + Vulkan（Qwen2.5-7B GGUF） | 规则引擎 | ✅ **llamasharp**（~100 tok/s，**GBNF 约束解码**） |
 | ASR | sherpa-onnx 流式 paraformer | 不可用 | ✅ **sherpa-onnx**（int8/CPU，**partial 字幕**） |
 | VAD | Silero（sherpa-onnx） | 能量阈值 | ✅ **silero**（7/7 样本恰好 1 次句尾） |
-| TTS | 预生成语音库（~0ms） | sherpa-onnx VITS 实时合成 → 纯字幕 | **voicelib**（68 条真 wav，带防重复轮换）；VITS 未装 |
+| TTS | 预生成语音库（~0ms） | sherpa-onnx VITS 实时合成 → 纯字幕 | **voicelib**（71 条真 wav，带防重复轮换）；VITS 未装 |
 | 传输 | gRPC | — | ✅ **grpc**（localhost:50051） |
 
 任一环节缺失都不影响启动：清空 `models/` 即退回 `规则引擎 + 语音库`，CLI 与全部测试照常可用。
@@ -42,12 +48,12 @@ ai-game/
 │   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 135 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
+│   ├── Copilot.Tests/          # xUnit 137 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：32 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
 ├── data/sensitive_words.txt    # 共享敏感词表
-├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（68 条 24kHz）
+├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（71 条 24kHz）
 ├── tools/                      # fetch_models.ps1 / make_command_samples.ps1 / build_unity_plugins.ps1
 │                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
 ├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC-Web
@@ -69,7 +75,7 @@ cd e:\AI_Workplace\AI_Game\ai-game
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（135 项）
+# 1) 编译（0 警告 0 错误）+ 测试（137 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 

@@ -10,7 +10,7 @@ public class VoiceLibTests
     {
         var lib = TestPaths.LoadVoiceLib();
 
-        Assert.Equal(68, lib.Items.Count);
+        Assert.Equal(71, lib.Items.Count);
         Assert.Equal(24000, lib.SampleRate);
         Assert.All(lib.Items, e => Assert.NotNull(e.AbsoluteWavPath));
     }

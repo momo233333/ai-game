@@ -27,13 +27,14 @@ namespace Copilot.Core
         public const float MaxHoldMs = 5000f;
         public const float MaxHoldSpeedKmh = 30f;
 
-        /// <summary>值域限幅：转向 ±0.8、油门/刹车 [0,1]、hold_ms [200,5000]。</summary>
+        /// <summary>值域限幅：转向 ±0.8、油门 [-1,1]（**负 = 倒车**）、刹车 [0,1]、hold_ms [200,5000]。</summary>
         public static DriveAction Clamp(DriveAction action)
         {
             if (action == null) throw new ArgumentNullException(nameof(action));
             var a = action.Clone();
             a.Steering = ClampF(a.Steering, -MaxSteer, MaxSteer);
-            a.Throttle = ClampF(a.Throttle, 0f, 1f);
+            // 负油门是**倒车**，不是错误值，别夹掉
+            a.Throttle = ClampF(a.Throttle, -1f, 1f);
             a.Brake = ClampF(a.Brake, 0f, 1f);
             a.HoldMs = (int)ClampF(a.HoldMs, MinHoldMs, MaxHoldMs);
             a.Confidence = ClampF(a.Confidence, 0f, 1f);
@@ -86,6 +87,9 @@ namespace Copilot.Core
                     return new DriveAction { Intent = intent, Steering = 0.3f, Throttle = 0.4f, HoldMs = 1500, Confidence = 0.9f };
                 case Intents.Park:
                     return new DriveAction { Intent = intent, Brake = 0.6f, HoldMs = 2000, Confidence = 0.9f };
+                case Intents.Reverse:
+                    // 倒车 = 负油门（见 Intents.Reverse 的说明）
+                    return new DriveAction { Intent = intent, Throttle = -0.45f, HoldMs = 1800, Confidence = 0.9f };
                 default:
                     // IGNORE / QUESTION_BACK / 未知：不给任何动力
                     return new DriveAction { Intent = intent, HoldMs = 500, Confidence = 1f };

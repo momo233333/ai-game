@@ -38,8 +38,12 @@ public sealed class Config
         /// <summary>一个 JSON 对象够用；实测模型会一路生成到上限，值越大延迟越高。</summary>
         public int MaxTokens { get; set; } = 128;
 
-        /// <summary>结构化分类任务，温度要低；实测 0.7 会让 7B 随机把正常指令判成 IGNORE。</summary>
-        public float Temperature { get; set; } = 0.3f;
+        /// <summary>
+        /// 结构化分类任务，温度要**很低**。实测：0.7 会让 7B 随机把正常指令判成 IGNORE；
+        /// 0.3 仍会抖动（同一句「向右拐弯」两次跑出 TURN_RIGHT / QUESTION_BACK 两种结果）。
+        /// 降到 0.1 稳定下来 —— 妹妹的台词花样靠语音库轮换，不靠 LLM 随机，所以没有代价。
+        /// </summary>
+        public float Temperature { get; set; } = 0.1f;
 
         /// <summary>
         /// 是否用 GBNF 文法约束解码（见 <see cref="Copilot.Core.Llm.OutputGrammar"/>）。

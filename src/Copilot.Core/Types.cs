@@ -52,10 +52,16 @@ namespace Copilot.Core
         public const string Ignore = "IGNORE";
         public const string QuestionBack = "QUESTION_BACK";
 
+        /// <summary>
+        /// 倒车。**动作参数用负油门表示**（<see cref="DriveAction.Throttle"/> &lt; 0），
+        /// 这样不用为「倒挡」单独加字段、也不用改协议。
+        /// </summary>
+        public const string Reverse = "REVERSE";
+
         /// <summary>LLM 允许输出的意图全集（白名单）。</summary>
         public static readonly IReadOnlyList<string> All = new[]
         {
-            TurnLeft, TurnRight, Accelerate, Brake, LaneChange, Park, Ignore, QuestionBack,
+            TurnLeft, TurnRight, Accelerate, Brake, LaneChange, Park, Ignore, QuestionBack, Reverse,
         };
 
         public static bool IsAllowed(string? intent)

@@ -33,7 +33,7 @@ public class ConfigTests
     {
         var config = Config.Load();
 
-        Assert.Equal(68, VoiceLib.Load(config.ResolvePath(config.Tts.VoicelibManifest)).Items.Count);
+        Assert.Equal(71, VoiceLib.Load(config.ResolvePath(config.Tts.VoicelibManifest)).Items.Count);
         Assert.Equal(8, SafetyFilter.FromFile(config.ResolvePath(config.Safety.WordsFile)).Count);
     }
 
@@ -144,7 +144,7 @@ public class AiRuntimeTests
         Assert.Equal("rule", runtime.Llm.Name);
         Assert.Equal("voicelib", runtime.Tts.Name);
         Assert.Null(runtime.Asr);
-        Assert.Equal(68, runtime.VoiceLib.Items.Count);
+        Assert.Equal(71, runtime.VoiceLib.Items.Count);
         Assert.Equal(8, runtime.Safety.Count);
     }
 

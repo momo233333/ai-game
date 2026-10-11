@@ -55,6 +55,18 @@ $methods = if ($All) { $defaultMethods }
            else { throw "pass -Method <type.method> or -All" }
 
 function Wait-NoUnity {
+    # 必须**先等它起来**再等它退出：Unity 启动器拉起真正的编辑器有延迟，
+    # 只轮询「进程消失」会立刻看到 0 个进程就返回，然后下一个方法把还没跑完的实例杀掉
+    # —— 表现是「脚本报 ok，但日志是空的」（踩过）。
+    $appearDeadline = (Get-Date).AddSeconds(120)
+    while ((Get-Date) -lt $appearDeadline -and -not (Get-Process Unity -ErrorAction SilentlyContinue)) {
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not (Get-Process Unity -ErrorAction SilentlyContinue)) {
+        Write-Host "  !! Unity never started within 120s" -ForegroundColor Yellow
+        return
+    }
+
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     while ((Get-Date) -lt $deadline -and (Get-Process Unity -ErrorAction SilentlyContinue)) {
         Start-Sleep -Seconds 4
