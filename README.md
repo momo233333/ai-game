@@ -1,4 +1,4 @@
-﻿# 《副驾指令》游戏原型
+# 《副驾指令》游戏原型
 
 本地 AI 语音交互驾驶模拟游戏。**主线为 V2.0 全 C# 架构**（见 [`IT方案1.md`](IT方案1.md)）：
 Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR / LLM / TTS 全本地推理），两者同语言、共享契约与纯逻辑类库。
@@ -35,7 +35,8 @@ ai-game/
 │   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信任情绪/语音库/编排（netstandard2.1，Unity 可引用）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 107 项（含起真 gRPC 服务端的集成测试）
+│   ├── Copilot.Tests/          # xUnit 116 项（含起真 gRPC 服务端的集成测试 + P6 对话回归集）
+│   ├── dialogue_cases.tsv      # P6 对话回归集：32 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
 ├── data/sensitive_words.txt    # 共享敏感词表
@@ -58,7 +59,7 @@ cd e:\AI_Workplace\AI_Game\ai-game
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（107 项）
+# 1) 编译（0 警告 0 错误）+ 测试（116 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -88,7 +89,17 @@ dotnet run --project src\Copilot.AIService -- --play "行，左转交给我"    
 
 # 6) 起 gRPC 服务（供 Unity 接入）
 dotnet run --project src\Copilot.AIService -- --server
+
+# 7) 对话回归集（P6）—— 32 条数据驱动用例，指标：指令正确率 / 安全拦截率 / 人格一致性
+dotnet test Copilot.sln --filter "FullyQualifiedName~DialogueRegressionTests"
+Get-Content logs\dialogue_regression_规则后端.log          # 首次运行后生成
+# 真 LLM 后端版（默认跳过；需 models/ 约 4.6GB，约 1s/条）
+$env:COPILOT_LLM_REGRESSION=1; dotnet test Copilot.sln --filter "FullyQualifiedName~DialogueRegressionTests"
 ```
+
+> **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。
+> 分类决定语义断言：`指令`（须产生有效动作且不扣信任）、`危险`（须拒绝且扣信任）、`敏感`（须拦截且不改信任）、
+> `闲聊`/`致谢`/`模糊`/`抱怨`（**不得误判 IGNORE、不得扣信任**）。期望意图填 `-` 表示不校验。
 
 > **没有模型也能跑**：`models/` 为空时 LLM 自动降级到规则引擎、ASR 不可用，`--text` / `--play` 与全部测试照常可用。
 
