@@ -8,6 +8,9 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 >
 > **HUD**：右下角实时显示**车速**与**方向盘转角**（看不见这两个数就没法在她犯错前干预）。
 > **可执行动作 7 个**：左转 / 右转 / 加速 / 刹车 / 变道 / 靠边停车 / **倒车**（倒车 = 负油门）。
+> 口语映射：**直行 / 一直往前走 / 保持直线** → 加速；**左前方 / 右前方行驶 / 变道 / 并线** → 变道
+> （**变道本身不带左右，方向由代码从你的原话解析**，所以「向左变道」车才会真的往左偏）；
+> 说「打方向盘」而不说往哪边时，她会**反问你「往哪边？」**——这是正确行为，猜一个方向才是错的。
 
 > **开发进度 / 环境快照 / 已知问题 / 下一步** 见 [`开发进度.md`](开发进度.md) —— 每次开工先读它，完成阶段后更新它。
 
@@ -48,8 +51,8 @@ ai-game/
 │   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 137 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
-│   ├── dialogue_cases.tsv      # P6 对话回归集：32 条用例（TAB 分隔，分类语义断言）
+│   ├── Copilot.Tests/          # xUnit 146 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
+│   ├── dialogue_cases.tsv      # P6 对话回归集：41 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
 ├── data/sensitive_words.txt    # 共享敏感词表
@@ -75,7 +78,7 @@ cd e:\AI_Workplace\AI_Game\ai-game
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（137 项）
+# 1) 编译（0 警告 0 错误）+ 测试（146 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -106,7 +109,7 @@ dotnet run --project src\Copilot.AIService -- --play "行，左转交给我"    
 # 6) 起 gRPC 服务（供 Unity 接入）
 dotnet run --project src\Copilot.AIService -- --server
 
-# 7) 对话回归集（P6）—— 32 条数据驱动用例，指标：指令正确率 / 安全拦截率 / 人格一致性
+# 7) 对话回归集（P6）—— 41 条数据驱动用例，指标：指令正确率 / 安全拦截率 / 人格一致性
 dotnet test Copilot.sln --filter "FullyQualifiedName~DialogueRegressionTests"
 Get-Content logs\dialogue_regression_规则后端.log          # 首次运行后生成
 # 真 LLM 后端版（默认跳过；需 models/ 约 4.6GB，约 1s/条）

@@ -96,6 +96,23 @@ namespace Copilot.Core
             }
         }
 
+        /// <summary>
+        /// 把「往哪边」补进中立意图的转向里（<paramref name="direction"/>：-1 左 / +1 右 / 0 不管）。
+        ///
+        /// 只对**本身不带方向的横向动作**生效（目前只有 <see cref="Intents.LaneChange"/>）。
+        /// TURN_LEFT/TURN_RIGHT 的方向已经写在意图里，不该被这里覆盖。
+        /// 这一步必须排在 <see cref="Guard"/>（里面会套 Canonical）**之后**，否则会被 +0.3 覆盖回去。
+        /// </summary>
+        public static void ApplyDirection(DriveAction action, int direction)
+        {
+            if (action == null || direction == 0) return;
+            if (!string.Equals(action.Intent, Intents.LaneChange, StringComparison.Ordinal)) return;
+
+            float magnitude = Math.Abs(action.Steering);
+            if (magnitude < 0.01f) magnitude = Math.Abs(Canonical(Intents.LaneChange).Steering);
+            action.Steering = direction < 0 ? -magnitude : magnitude;
+        }
+
         /// <summary>LLM 没给数值（全 0）时套用规范参数；给了数值就按原值走限幅。</summary>
         public static DriveAction ApplyCanonicalIfUnspecified(DriveAction action)
         {

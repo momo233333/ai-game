@@ -127,6 +127,8 @@ namespace Copilot.Core
                             }
 
                             guard = ActionLimits.Guard(ready, state);
+                            // 「往哪边」归代码（要放在 Guard 套完 Canonical 之后，否则会被 +0.3 覆盖）
+                            ActionLimits.ApplyDirection(guard.Action, Intents.ParseDirection(request.PlayerText));
                             actionEmitted = true;
                             yield return TurnEvent.Drive(guard.Action);
                         }
@@ -178,6 +180,7 @@ namespace Copilot.Core
 
             // 3) 指令守卫（流式路径已在 action 闭合时做过；这里兜底非流式后端）
             guard ??= ActionLimits.Guard(output.Action, state);
+            ActionLimits.ApplyDirection(guard.Action, Intents.ParseDirection(request.PlayerText));
             if (!actionEmitted)
             {
                 yield return TurnEvent.Drive(guard.Action);

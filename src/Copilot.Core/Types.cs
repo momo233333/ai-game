@@ -94,6 +94,42 @@ namespace Copilot.Core
             }
             return false;
         }
+
+        static readonly string[] LeftWords = { "左", "左拐", "左打", "左前", "往左", "向左", "左边" };
+        static readonly string[] RightWords = { "右", "右拐", "右打", "右前", "往右", "向右", "右边" };
+
+        /// <summary>
+        /// 从教练原话里抽方向：**-1 = 左，+1 = 右，0 = 没说**。
+        ///
+        /// 「方向判定归代码」和危险判定同一个思路：LLM 只决定**做什么**（intent），
+        /// **往哪边**由代码从原话里抽 —— 因为 LANE_CHANGE 这类意图本身不带方向。
+        /// 实测踩过的坑：LLM 只输出 `LANE_CHANGE`，而 `Canonical` 把转向固定成 +0.3，
+        /// 于是「向左变道」车反而往右偏。
+        ///
+        /// 左右都出现时（「左右打方向」）取**最后出现**的那个。
+        /// </summary>
+        public static int ParseDirection(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+
+            int left = LastIndexOfAny(text!, LeftWords);
+            int right = LastIndexOfAny(text!, RightWords);
+            if (left < 0 && right < 0) return 0;
+            if (left < 0) return 1;
+            if (right < 0) return -1;
+            return right > left ? 1 : -1;
+        }
+
+        private static int LastIndexOfAny(string text, string[] words)
+        {
+            int last = -1;
+            for (int i = 0; i < words.Length; i++)
+            {
+                int idx = text.LastIndexOf(words[i], StringComparison.Ordinal);
+                if (idx > last) last = idx;
+            }
+            return last;
+        }
     }
 
     /// <summary>结构化驾驶指令（proto DriveAction 的领域模型）。</summary>

@@ -46,8 +46,8 @@ namespace Copilot.Core.Llm
                 return Move(Intents.Park, "靠边停是吧，好。", 0f);
             }
 
-            // 4) 变道 / 并线
-            if (ContainsAny(t, "变道", "并线", "换道", "超车"))
+            // 4) 横向 / 斜向（变道 / 并线 / 左前方 / 右前方）。哪边由 ActionLimits.ApplyDirection 从原话补
+            if (ContainsAny(t, "变道", "并线", "换道", "超车", "前方行驶", "左前", "右前"))
             {
                 float steer = ContainsAny(t, "左") ? -0.3f : 0.3f;
                 return Move(Intents.LaneChange, "变道，看后视镜。", 0f, steeringOverride: steer);
@@ -63,8 +63,9 @@ namespace Copilot.Core.Llm
                 return Move(Intents.TurnRight, "右转收到，看我打灯", 1f);
             }
 
-            // 6) 加速
-            if (ContainsAny(t, "加速", "快点", "踩油门", "油门", "提速", "快一点", "轰"))
+            // 6) 加速 / 直行（「直行」「一直往前走」「保持直线行驶」都算保持前进）
+            if (ContainsAny(t, "加速", "快点", "踩油门", "油门", "提速", "快一点", "轰",
+                            "直行", "一直往前", "保持直线", "继续开", "往前走"))
             {
                 return Move(Intents.Accelerate, "油门我来，抓好了", 0f);
             }

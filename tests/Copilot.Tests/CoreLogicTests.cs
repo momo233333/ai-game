@@ -39,6 +39,43 @@ public class ActionLimitsTests
         Assert.True(c.Throttle < 0f, "倒车必须给负油门");
     }
 
+    // ---- 「往哪边」归代码（LANE_CHANGE 本身不带方向）----
+
+    [Theory]
+    [InlineData("向左变道", -1)]
+    [InlineData("往右变道", 1)]
+    [InlineData("左前方行驶", -1)]
+    [InlineData("右前方行驶", 1)]
+    [InlineData("变道", 0)]
+    [InlineData("打方向盘", 0)]
+    [InlineData("先往左再往右", 1)]
+    public void 从原话抽方向(string text, int expected)
+    {
+        Assert.Equal(expected, Intents.ParseDirection(text));
+    }
+
+    [Fact]
+    public void 方向矫正_向左变道给负转向()
+    {
+        // 回归：LLM 只输出 LANE_CHANGE，而 Canonical 把转向固定成 +0.3，
+        // 于是「向左变道」车反而往右偏 —— 方向必须由代码从原话补。
+        var lane = ActionLimits.Guard(new DriveAction { Intent = Intents.LaneChange }, new GameStateSnapshot()).Action;
+
+        ActionLimits.ApplyDirection(lane, Intents.ParseDirection("向左变道"));
+
+        Assert.True(lane.Steering < 0f, "向左变道必须给负转向（左）");
+    }
+
+    [Fact]
+    public void 方向矫正_不动已经带方向的左右转()
+    {
+        var turn = ActionLimits.Canonical(Intents.TurnLeft);
+
+        ActionLimits.ApplyDirection(turn, 1);
+
+        Assert.True(turn.Steering < 0f, "TURN_LEFT 的方向已写在意图里，不该被覆盖");
+    }
+
     [Fact]
     public void Clamp_不改动入参_返回副本()
     {
