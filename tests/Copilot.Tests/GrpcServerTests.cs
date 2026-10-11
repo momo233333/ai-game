@@ -1,4 +1,5 @@
 using Copilot.AIService;
+using Copilot.Client;
 using Copilot.Contracts;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -24,8 +25,6 @@ public sealed class GrpcServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
-
         var config = Config.Load();
         config.Server.Url = $"http://127.0.0.1:{Port}";
         // 测试必须与模型无关：钉死规则后端 + 关掉 ASR，
@@ -37,7 +36,8 @@ public sealed class GrpcServerFixture : IAsyncLifetime
         _cts = new CancellationTokenSource();
         _serverTask = ServerHost.RunAsync(_runtime, _cts.Token);
 
-        Channel = GrpcChannel.ForAddress($"http://127.0.0.1:{Port}");
+        // 与游戏一致走 gRPC-Web over HTTP/1.1（Unity 的 Mono 只能 HTTP/1.1，见 开发进度.md 债 #13）
+        Channel = CopilotClient.CreateChannel($"http://127.0.0.1:{Port}");
         var client = new GrpcService.AIServiceClient(Channel);
 
         for (int i = 0; i < 100; i++)
@@ -142,14 +142,11 @@ public class GrpcServerTests : IClassFixture<GrpcServerFixture>
     public async Task VoiceTurn在ASR缺失时返回明确错误()
     {
         var client = Client();
-        using var call = client.VoiceTurn();
 
-        await call.RequestStream.WriteAsync(new AudioChunk
+        using var call = client.VoiceTurn(new AudioTurnRequest
         {
             Pcm16 = Google.Protobuf.ByteString.CopyFrom(new byte[3200]),
-            EndOfStream = true,
         });
-        await call.RequestStream.CompleteAsync();
 
         var events = new List<TurnEvent>();
         await foreach (var e in call.ResponseStream.ReadAllAsync()) events.Add(e);

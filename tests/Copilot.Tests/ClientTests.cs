@@ -23,8 +23,6 @@ public sealed class ClientFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
-
         var config = Config.Load();
         config.Server.Url = Url;
         // 与模型无关：钉死规则后端 + 关掉 ASR（同 GrpcServerFixture，理由见技术债 #8）
@@ -36,6 +34,7 @@ public sealed class ClientFixture : IAsyncLifetime
         _serverTask = ServerHost.RunAsync(_runtime, _cts.Token);
 
         using var probe = new CopilotClient(Url);
+        Exception? last = null;
         for (int i = 0; i < 100; i++)
         {
             try
@@ -43,13 +42,14 @@ public sealed class ClientFixture : IAsyncLifetime
                 await probe.HealthAsync();
                 return;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                last = ex;
                 await Task.Delay(100);
             }
         }
 
-        throw new InvalidOperationException("gRPC 服务端在 10s 内未就绪");
+        throw new InvalidOperationException("gRPC 服务端在 10s 内未就绪。最后一次错误：" + last);
     }
 
     public async Task DisposeAsync()
@@ -131,13 +131,9 @@ public class CopilotClientTests : IClassFixture<ClientFixture>
     public async Task 语音回合_ASR缺失时返回明确错误事件()
     {
         using var client = new CopilotClient(_fixture.Url);
-        using var session = client.StartVoiceTurn();
-
-        await session.WriteAsync(new byte[3200], endOfStream: true);
-        await session.CompleteRequestAsync();
 
         var events = new List<Core.TurnEvent>();
-        await foreach (var e in session.ReadEventsAsync()) events.Add(e);
+        await foreach (var e in client.VoiceTurnAsync(new byte[3200])) events.Add(e);
 
         var error = events.First(e => e.Kind == Core.TurnEventKind.Error);
         Assert.Equal("asr_unavailable", error.ErrorCode);

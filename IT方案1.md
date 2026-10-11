@@ -170,8 +170,11 @@ syntax = "proto3";
 package copilot;
 
 service AIService {
-  // 上行音频流 → 下行完整AI响应流（双向流式）
-  rpc VoiceTurn(stream AudioChunk) returns (stream TurnEvent);
+  // 语音回合：整段 16kHz PCM16 一次上行 → 完整 AI 响应流
+  // 注意：**不是双向流**。全链路走 gRPC-Web（HTTP/1.1），而 gRPC-Web 不支持双向流/客户端流
+  //       ——原因是 Unity 2022.3 的 Mono BCL 不支持 h2c，原生 gRPC 实测直接被拒
+  //       （见 开发进度.md 债 #13）。服务端本来就是「收完整段音频再转写」，无功能损失。
+  rpc VoiceTurn(AudioTurnRequest) returns (stream TurnEvent);
   // 文本回合（无 ASR 时的等价入口，便于自测/回归）
   rpc TextTurn(TextRequest) returns (stream TurnEvent);
   // 状态同步（Unity → AI，每次场景/数值变化时调用）
@@ -180,11 +183,8 @@ service AIService {
   rpc Ping(Empty) returns (Health);
 }
 
-message AudioChunk {
-  bytes pcm16 = 1;          // 16kHz mono PCM
-  int64 seq = 2;
-  bool end_of_stream = 3;   // 玩家主动结束或静音超时
-}
+// 一次语音回合的上行音频：16kHz 单声道 PCM16（整段一次带上，服务端一次性转写）
+message AudioTurnRequest { bytes pcm16 = 1; }
 
 message TextRequest { string text = 1; }
 
@@ -282,7 +282,10 @@ async IAsyncEnumerable<TurnEvent> VoiceTurn(IAsyncEnumerable<AudioChunk> chunks)
 
 **要点**：
 
-- 麦克风采集在伴生进程用 `NAudio.WaveInEvent`（语音交互自测），正式游戏采集移到 Unity `Microphone.Start`（480 帧环形缓冲），重采样 16kHz 推流。两个入口共用同一套 `AudioBus` 抽象。
+- **上面这段是「流式聆听」的构想，落在 CLI 的 `--mic` 本地路径上**（那里确实边收边出 partial 字幕）。
+  gRPC 的 `VoiceTurn` 因为走 gRPC-Web（不支持双向流）只能是「整段音频一次上行 → 服务端一次性转写」，
+  所以实测没有跨 gRPC 的 partial 字幕；Unity 侧的按键说话也相应是「松开即提交」。
+- 麦克风采集在伴生进程用 `NAudio.WaveInEvent`（语音交互自测），正式游戏采集移到 Unity `Microphone.Start`（环形缓冲），重采样 16kHz 推流。两个入口共用同一套 `AudioBus` 抽象。
 - ASR 置信度 < 0.6 时 `asr_final` 附低置信标记，DialogueCore 触发“反问”分支（“啊？你说啥？风太大没听清”）——技术缺陷转化为玩法。
 - VAD 参数需在实际噪音环境实测调优，预留配置热加载。
 

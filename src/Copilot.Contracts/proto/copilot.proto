@@ -6,9 +6,15 @@ option csharp_namespace = "Copilot.Contracts";
 
 // 《副驾指令》Unity ↔ AI 伴生进程核心契约（IT方案1.md V2.0 §4）
 service AIService {
-  // 上行音频流 → 下行完整AI响应流（双向流式）
-  rpc VoiceTurn(stream AudioChunk) returns (stream TurnEvent);
-  // ASR 未就绪 / 文本调试时的文本回合（与文本管线同事件结构）
+  // 语音回合：整段 16kHz PCM16 一次上行 → 完整 AI 响应流
+  //
+  // 为什么不是双向流：**gRPC-Web 不支持双向流与客户端流**。
+  // Unity 2022.3 的 Mono BCL 只支持 HTTP/1.1（不支持 h2c），托管 gRPC 会拿到
+  // "Response protocol downgraded to HTTP/1.1"，因此全链路改走 gRPC-Web over HTTP/1.1。
+  // 而 gRPC-Web 只支持 unary + 服务端流 —— 见开发进度.md 债 #13。
+  // 好在服务端本来就是「收完整段音频再转写」，换成单请求没有任何功能损失。
+  rpc VoiceTurn(AudioTurnRequest) returns (stream TurnEvent);
+  // ASR 未就绪 / 文本调试时的文本回合（与语音回合同事件结构）
   rpc TextTurn(TextRequest) returns (stream TurnEvent);
   // 状态同步（Unity → AI，每次场景/数值变化时调用）
   rpc SyncGameState(GameState) returns (Ack);
@@ -18,11 +24,8 @@ service AIService {
 
 message TextRequest { string text = 1; }
 
-message AudioChunk {
-  bytes pcm16 = 1;        // 16kHz mono PCM
-  int64 seq = 2;
-  bool end_of_stream = 3; // 玩家主动结束或静音超时
-}
+// 一次语音回合的上行音频：16kHz 单声道 PCM16（整段一次带上，服务端一次性转写）
+message AudioTurnRequest { bytes pcm16 = 1; }
 
 message GameState {
   float trust = 1;

@@ -44,8 +44,8 @@ public sealed class GrpcAiService : GrpcService.AIServiceBase
         }
     }
 
-    public override async Task VoiceTurn(IAsyncStreamReader<AudioChunk> requestStream,
-        IServerStreamWriter<TurnEvent> responseStream, ServerCallContext context)
+    public override async Task VoiceTurn(AudioTurnRequest request, IServerStreamWriter<TurnEvent> responseStream,
+        ServerCallContext context)
     {
         if (_runtime.Asr == null)
         {
@@ -54,15 +54,8 @@ public sealed class GrpcAiService : GrpcService.AIServiceBase
             return;
         }
 
-        using var buffer = new MemoryStream();
-        while (await requestStream.MoveNext(context.CancellationToken))
-        {
-            var chunk = requestStream.Current;
-            if (chunk.Pcm16.Length > 0) chunk.Pcm16.WriteTo(buffer);
-            if (chunk.EndOfStream) break;
-        }
-
-        var text = await _runtime.Asr.TranscribeAsync(buffer.ToArray(), context.CancellationToken);
+        var pcm = request.Pcm16?.ToByteArray() ?? Array.Empty<byte>();
+        var text = await _runtime.Asr.TranscribeAsync(pcm, context.CancellationToken);
 
         await foreach (var e in _runtime.Pipeline.RunTextTurnStreamAsync(
                            text, _runtime.CurrentState, context.CancellationToken))

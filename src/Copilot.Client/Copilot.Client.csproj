@@ -12,8 +12,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- 托管实现，无需各平台原生库 —— Unity 侧只需把 DLL 拷进 Assets/Plugins -->
+    <!-- 托管实现，无需各平台原生库 —— Unity 侧只需把 DLL 拷进 Assets/Plugins。
+         走 gRPC-Web（HTTP/1.1）：Unity 2022.3 的 Mono 不支持 h2c，原生 gRPC 会拿到
+         "Response protocol downgraded to HTTP/1.1"（实测，见开发进度.md 债 #13）。 -->
     <PackageReference Include="Grpc.Net.Client" Version="2.66.0" />
+    <PackageReference Include="Grpc.Net.Client.Web" Version="2.66.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -8,11 +8,11 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 ## 架构（V2.0）
 
 ```
-Unity 主进程 (C#)  ──gRPC(localhost:50051)──►  AI 伴生进程 (C#, .NET 8)
-渲染/物理/UI/麦克风                             VAD→ASR→Dialogue(LLM)→ActionParser→TTS
-        │                                         ▲
-        └── 共用接入层 Copilot.Client ────────────┘  共享 Copilot.Core（纯逻辑，netstandard2.1）
-              （gRPC 客户端 + 事件映射，无 Unity 依赖）     契约 Copilot.Contracts（proto，两端同源）
+Unity 主进程 (C#)  ──gRPC-Web/HTTP1.1(localhost:50051)──►  AI 伴生进程 (C#, .NET 8)
+渲染/物理/UI/麦克风                                        VAD→ASR→Dialogue(LLM)→ActionParser→TTS
+        │                                                    ▲
+        └── 共用接入层 Copilot.Client ───────────────────────┘  共享 Copilot.Core（纯逻辑，netstandard2.1）
+              （gRPC 客户端 + 事件映射，无 Unity 依赖）              契约 Copilot.Contracts（proto，两端同源）
 ```
 
 **为什么多一个 `Copilot.Client`**：传输与事件映射写在共享库里，Unity 脚本、编辑器工具、集成测试
@@ -50,7 +50,9 @@ ai-game/
 ├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（72 条 24kHz）
 ├── tools/                      # fetch_models.ps1 / make_command_samples.ps1 / build_unity_plugins.ps1
 │                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
-├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC
+├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC-Web
+│                               #   Assets/Scripts（运行时）+ Assets/Editor（连通性自检）
+│                               #   Assets/Plugins/Copilot（DLL，gitignore，由脚本生成）
 └── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
 ```
 
@@ -106,8 +108,13 @@ $env:COPILOT_LLM_REGRESSION=1; dotnet test Copilot.sln --filter "FullyQualifiedN
 # 8) Unity 接入（P8）—— 先起服务端，再把共享库 DLL 拷进 Unity 工程
 dotnet run --project src\Copilot.AIService -- --server          # 保持这个窗口开着
 powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
-# 然后用 Unity Hub 以 2022.3 LTS 打开 unity\ 目录；场景里挂 CopilotBootstrap 即可
-#   （装配 VehicleController + 一个 AudioSource，按住空格说话）
+# 用 Unity **2022.3 LTS** 打开 unity\ 目录（工程已在本机 2022.3.62f3c1 上验证过编译与连通）
+# 场景里挂 CopilotBootstrap（配 VehicleController + 一个 AudioSource），按住空格说话
+
+# 9) Unity 连通性自检（编辑器菜单也能点：副驾指令 / 连通性自检）
+#    在 Unity 的运行时里真连一次服务端，验证传输/事件映射/音频回传
+& "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
+  -executeMethod Copilot.EditorTools.SmokeTest.Run -logFile logs\unity_smoke.log
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。
@@ -131,10 +138,17 @@ powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
 
 | RPC | 用途 |
 |-----|------|
-| `VoiceTurn(stream AudioChunk) → stream TurnEvent` | 音频上行 → 事件流 |
+| `VoiceTurn(AudioTurnRequest) → stream TurnEvent` | 整段 16kHz PCM16 上行 → 事件流 |
 | `TextTurn(TextRequest) → stream TurnEvent` | 文本回合（ASR 未就绪时的等价入口） |
 | `SyncGameState(GameState) → Ack` | Unity 回推权威状态（信任/情绪/遥测） |
 | `Ping(Empty) → Health` | 健康检查 + 各后端降级状态 |
+
+> **传输走 gRPC-Web over HTTP/1.1，不是原生 gRPC**：Unity 2022.3 的 Mono BCL 不支持 h2c，
+> 原生 gRPC 实测直接失败（`Bad gRPC response. Response protocol downgraded to HTTP/1.1.`）。
+> 代价是 gRPC-Web **不支持双向流**，所以 `VoiceTurn` 是「单请求 + 服务端流」。
+> 客户端在 [CopilotClient.cs](src/Copilot.Client/CopilotClient.cs) 里统一用
+> `GrpcWebHandler` + `GrpcChannelOptions.HttpVersion = 1.1`（不压死版本会撞
+> `HTTP_1_1_REQUIRED`）；服务端 `app.UseGrpcWeb()` + Kestrel `Http1AndHttp2`。
 
 改过 `src/Copilot.Contracts/proto/copilot.proto` 后重新生成代码：`dotnet build src\Copilot.Contracts\Copilot.Contracts.csproj`。
 

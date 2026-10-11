@@ -23,7 +23,8 @@ unity/[Bb]uilds/
 unity/[Ll]ogs/
 unity/[Uu]ser[Ss]ettings/
 # Unity 侧引用的共享库 DLL（由 tools/build_unity_plugins.ps1 生成）
-unity/Assets/Plugins/Copilot/
+unity/Assets/Plugins/
+unity/Assets/Plugins.meta
 
 # 运行时数据（会话状态 / 测试临时库）
 ai-service/memory.db

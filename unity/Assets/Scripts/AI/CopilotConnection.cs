@@ -140,6 +140,9 @@ namespace Copilot.AI
         /// <summary>
         /// 提交一段**已经录完的** 16kHz 单声道 PCM16 作为一次语音回合。
         /// 录制策略（按键说话 / 免提）留给 <c>MicCapture</c>，这里只负责上行与收事件。
+        ///
+        /// 注意：契约是「单请求 + 服务端流」，不是双向流 —— gRPC-Web 不支持双向流，
+        /// 而 Unity 的 Mono 只能跑 HTTP/1.1（见 开发进度.md 债 #13）。
         /// </summary>
         public bool SendVoice(byte[] pcm16)
         {
@@ -153,25 +156,10 @@ namespace Copilot.AI
             {
                 try
                 {
-                    using (var session = client.StartVoiceTurn(token))
+                    await foreach (var e in client.VoiceTurnAsync(audio, token))
                     {
-                        // 16kHz 单声道 → 100ms/块（3200 字节），最后一块标记结束
-                        const int blockBytes = 3200;
-                        for (int offset = 0; offset < audio.Length; offset += blockBytes)
-                        {
-                            int length = Math.Min(blockBytes, audio.Length - offset);
-                            var slice = new byte[length];
-                            Array.Copy(audio, offset, slice, 0, length);
-                            bool last = offset + length >= audio.Length;
-                            await session.WriteAsync(slice, last, token);
-                        }
-                        await session.CompleteRequestAsync();
-
-                        await foreach (var e in session.ReadEventsAsync(token))
-                        {
-                            var captured = e;
-                            Enqueue(() => TurnEventReceived?.Invoke(captured));
-                        }
+                        var captured = e;
+                        Enqueue(() => TurnEventReceived?.Invoke(captured));
                     }
                     Enqueue(() => TurnCompleted?.Invoke());
                 }

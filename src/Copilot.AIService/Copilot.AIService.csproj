@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.66.0" />
+    <!-- gRPC-Web：Unity 的 Mono 只支持 HTTP/1.1（不支持 h2c），客户端一律走 gRPC-Web（开发进度.md 债 #13） -->
+    <PackageReference Include="Grpc.AspNetCore.Web" Version="2.66.0" />
     <!-- LLM：LLamaSharp（Vulkan）。模型缺失时自动降级到规则后端 -->
     <PackageReference Include="LLamaSharp" Version="0.23.0" />
     <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.23.0" />
