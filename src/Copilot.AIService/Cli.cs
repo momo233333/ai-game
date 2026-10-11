@@ -441,6 +441,85 @@ public static class Cli
         AudioIo.Play(result.Pcm16, result.SampleRate);
     }
 
+    /// <summary>
+    /// 用**当前实时合成引擎**重录语音库（`voice-corpus/lines.csv` → `wavs/&lt;id&gt;.wav`）。
+    ///
+    /// 为什么需要它：`TtsRouter` 的 ①「语音库精确命中」与 ②「实时合成」是两条不同来源，
+    /// **只有两者用同一个引擎时，妹妹才是一个嗓门**。换引擎（SAPI ↔ VITS/melo-tts）后必须重录，
+    /// 否则库内台词一个声音、自由句另一个声音 —— 这正是日志 T 里选 SAPI 的那条理由。
+    /// 用它就不必再依赖 `tools/voicelib_synth.py`（那个走 Windows SAPI），语料永远跟当前引擎一致。
+    /// </summary>
+    public static void RunSynthVoiceLib(AiRuntime runtime)
+    {
+        if (runtime.RealtimeTts == null)
+        {
+            Console.Error.WriteLine("[错误] 实时合成不可用（tts.backend=voicelib？），无法重录语料。");
+            return;
+        }
+
+        var manifest = runtime.Config.ResolvePath(runtime.Config.Tts.VoicelibManifest);
+        var corpusDir = Path.GetDirectoryName(manifest) ?? "voice-corpus";
+        var csvPath = Path.Combine(corpusDir, "lines.csv");
+        var wavDir = Path.Combine(corpusDir, "wavs");
+
+        if (!File.Exists(csvPath))
+        {
+            Console.Error.WriteLine($"[错误] 语料不存在：{csvPath}");
+            return;
+        }
+
+        var rows = ReadCorpus(csvPath);
+        if (rows.Count == 0)
+        {
+            Console.Error.WriteLine($"[错误] 语料为空：{csvPath}");
+            return;
+        }
+
+        Directory.CreateDirectory(wavDir);
+        Console.WriteLine($"  引擎：{runtime.RealtimeTts.Name} · 采样率 {runtime.RealtimeTts.SampleRate}Hz");
+        Console.WriteLine($"  语料：{rows.Count} 条 → {wavDir}");
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        int ok = 0;
+        var failed = new List<string>();
+
+        foreach (var (id, text) in rows)
+        {
+            var pcm = runtime.RealtimeTts.Synthesize(text);
+            if (pcm == null || pcm.Length == 0)
+            {
+                failed.Add(id);
+                continue;
+            }
+            AudioIo.SaveWav16(Path.Combine(wavDir, id + ".wav"), pcm, runtime.RealtimeTts.SampleRate);
+            ok++;
+            Console.WriteLine($"  [合成] {id} {pcm.Length / 2 / (double)runtime.RealtimeTts.SampleRate:0.0}s  {text}");
+        }
+
+        watch.Stop();
+        Console.WriteLine($"[重录] 成功 {ok}/{rows.Count} · 耗时 {watch.Elapsed.TotalSeconds:0.0}s · 引擎 {runtime.RealtimeTts.Name}");
+        if (failed.Count > 0)
+        {
+            Console.Error.WriteLine($"[重录] 失败 {failed.Count} 条：{string.Join(",", failed)}");
+        }
+    }
+
+    /// <summary>读 `lines.csv` 的 id/text 两列（表头跳过；台词里不含 ASCII 逗号，直接按逗号切即可）。</summary>
+    private static List<(string Id, string Text)> ReadCorpus(string csvPath)
+    {
+        var rows = new List<(string, string)>();
+        foreach (var line in File.ReadAllLines(csvPath, System.Text.Encoding.UTF8))
+        {
+            if (line.Length == 0 || line.StartsWith("id,", StringComparison.OrdinalIgnoreCase)) continue;
+            var parts = line.Split(',');
+            if (parts.Length < 2) continue;
+            var id = parts[0].Trim();
+            var text = parts[1].Trim();
+            if (id.Length > 0 && text.Length > 0) rows.Add((id, text));
+        }
+        return rows;
+    }
+
     private static void SpeakLast(IReadOnlyList<TurnEvent> events)
     {
         var tts = events.LastOrDefault(e => e.Kind == TurnEventKind.TtsAudio);

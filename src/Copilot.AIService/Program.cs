@@ -78,6 +78,12 @@ public static class Program
             return 0;
         }
 
+        if (HasFlag(args, "--synth-voicelib"))
+        {
+            Cli.RunSynthVoiceLib(runtime);
+            return 0;
+        }
+
         var wav = GetOption(args, "--wav");
         if (wav != null)
         {
@@ -120,6 +126,7 @@ public static class Program
           --speak                配合 --wav/--mic：把妹妹的语音放出来
           --vad <文件>            VAD 诊断：报告语音帧占比 / 语音突起次数 / 检出句尾（无麦克风也能验）
           --play "<台词>"        直接让妹妹说一句（验证音频输出链路）
+          --synth-voicelib       用当前实时合成引擎**重录** voice-corpus 的 71 条台词（保证与自由句同嗓门）
           --server               启动本地 gRPC 服务（供 Unity 接入）
           --health               打印后端装配与降级状态后退出
           --config <文件>        指定 appsettings.json

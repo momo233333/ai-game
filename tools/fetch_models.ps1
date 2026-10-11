@@ -10,15 +10,22 @@
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
   powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only asr
+  powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only tts
   powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Force
 #>
 param(
-    [ValidateSet('all', 'llm', 'asr', 'vad')]
+    [ValidateSet('all', 'llm', 'asr', 'vad', 'tts')]
     [string]$Only = 'all',
     [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
+
+# GitHub Releases is throttled to 0.01-0.15 MB/s from here, so every github.com URL below goes
+# through this mirror. Measured 2026-10-11: gh-proxy.com ~11.8 MB/s (vs 0.15 MB/s direct).
+# Other mirrors tested in the same run: ghfast.top 1.7, ghproxy.net 0.16, hub.gitmirror.com 0,
+# gh.llkk.cc 0, github.moeyy.xyz 0 (all MB/s).
+$GitHubProxy = 'https://gh-proxy.com/'
 
 # repo root = parent of this script's folder
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -99,11 +106,39 @@ function Fetch-Llm {
     Write-Host '    note: point llm.modelPath at part 1; llama.cpp loads the sibling shard automatically.' -ForegroundColor DarkGray
 }
 
+# ---------------------------------------------------------------- TTS
+function Fetch-Tts {
+    # melo-tts zh_en: an open-source Chinese+English VITS voice (MyShell). Native rate 44100Hz;
+    # the service resamples to 24000 (see SherpaVitsRealtimeTts.SampleRate).
+    $dirName = 'vits-melo-tts-zh_en'
+    $target = Join-Path $modelsDir $dirName
+    $model = Join-Path $target 'model.onnx'
+
+    if ((Test-Path $model) -and -not $Force) {
+        Write-Host "    [skip] $dirName already present" -ForegroundColor DarkGray
+        return
+    }
+
+    $asset = 'vits-melo-tts-zh_en.tar.bz2'
+    $tarball = Join-Path $modelsDir $asset
+    Get-File ($GitHubProxy + 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/' + $asset) $tarball 100MB
+
+    Write-Step "TTS: extracting $asset"
+    New-Item -ItemType Directory -Force -Path $target | Out-Null
+    & tar.exe -xjf $tarball -C $modelsDir
+    if ($LASTEXITCODE -ne 0) { throw "tar failed to extract $asset (exit $LASTEXITCODE)" }
+
+    Remove-Item $tarball -Force
+    Write-Host "    [ok]   extracted to models\$dirName" -ForegroundColor Green
+    Write-Host '    note: model.int8.onnx in the archive is a 133-byte LFS pointer, not a real model.' -ForegroundColor DarkGray
+}
+
 switch ($Only) {
-    'all' { Fetch-Vad; Fetch-Asr; Fetch-Llm }
+    'all' { Fetch-Vad; Fetch-Asr; Fetch-Llm; Fetch-Tts }
     'vad' { Fetch-Vad }
     'asr' { Fetch-Vad; Fetch-Asr }
     'llm' { Fetch-Llm }
+    'tts' { Fetch-Tts }
 }
 
 Write-Host ''

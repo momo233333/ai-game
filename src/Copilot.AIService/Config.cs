@@ -106,6 +106,26 @@ public sealed class Config
             public string Model { get; set; } = "vits-zh/model.onnx";
             public string Tokens { get; set; } = "vits-zh/tokens.txt";
             public string Lexicon { get; set; } = "vits-zh/lexicon.txt";
+
+            /// <summary>中文分词词典目录（melo-tts 等用 jieba，缺了会把中文读错）；piper 类模型不需要。</summary>
+            public string? DictDir { get; set; }
+
+            /// <summary>
+            /// 仅 **piper**（espeak-ng-data）类模型需要。**留空**——一旦非空，sherpa-onnx 会强制校验
+            /// <c>&lt;dataDir&gt;/phontab</c>，melo-tts 会因此建不出 TTS。
+            /// </summary>
+            public string? DataDir { get; set; }
+
+            /// <summary>数字/日期规则 FST，逗号分隔（如 <c>vits-melo-tts-zh_en/date.fst,vits-melo-tts-zh_en/number.fst</c>）。</summary>
+            public string? RuleFsts { get; set; }
+
+            /// <summary>
+            /// 语速缩放（VITS <c>length_scale</c>）：&gt;1 更慢更清楚，&lt;1 更快。
+            /// 实测 melo-tts 默认 1.0 偏快（「好，我慢慢减速」连流式 ASR 都只收到「我慢慢」），
+            /// 调到 1.15 后整句可识别，也更像新手学员的语速。
+            /// </summary>
+            public float LengthScale { get; set; } = 1.15f;
+
             public int NumThreads { get; set; } = 2;
         }
 
