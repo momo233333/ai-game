@@ -28,6 +28,7 @@ public sealed class ClientFixture : IAsyncLifetime
         // 与模型无关：钉死规则后端 + 关掉 ASR（同 GrpcServerFixture，理由见技术债 #8）
         config.Llm.Backend = "rule";
         config.Asr.Backend = "none";
+        config.Tts.Backend = "voicelib"; // 钉死语音库：不让测试依赖本机 SAPI 嗓音（债 #8 同理）
         _runtime = AiRuntime.Create(config);
 
         _cts = new CancellationTokenSource();

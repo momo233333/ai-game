@@ -11,6 +11,9 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 > 口语映射：**直行 / 一直往前走 / 保持直线** → 加速；**左前方 / 右前方行驶 / 变道 / 并线** → 变道
 > （**变道本身不带左右，方向由代码从你的原话解析**，所以「向左变道」车才会真的往左偏）；
 > 说「打方向盘」而不说往哪边时，她会**反问你「往哪边？」**——这是正确行为，猜一个方向才是错的。
+>
+> **妹妹说的话是大模型现编的**：`tts_audio` 走实时合成（Windows SAPI，音色与语音库同为 Huihui），
+> 所以她会针对你刚说的话回答（「你叫什么名字」→「我、我叫小雅……您是教练对吧？」），而不是背固定台词。
 
 > **开发进度 / 环境快照 / 已知问题 / 下一步** 见 [`开发进度.md`](开发进度.md) —— 每次开工先读它，完成阶段后更新它。
 
@@ -35,7 +38,7 @@ Unity 主进程 (C#)  ──gRPC-Web/HTTP1.1(localhost:50051)──►  AI 伴�
 | LLM | LLamaSharp + Vulkan（Qwen2.5-7B GGUF） | 规则引擎 | ✅ **llamasharp**（~100 tok/s，**GBNF 约束解码**） |
 | ASR | sherpa-onnx 流式 paraformer | 不可用 | ✅ **sherpa-onnx**（int8/CPU，**partial 字幕**） |
 | VAD | Silero（sherpa-onnx） | 能量阈值 | ✅ **silero**（7/7 样本恰好 1 次句尾） |
-| TTS | 预生成语音库（~0ms） | sherpa-onnx VITS 实时合成 → 纯字幕 | **voicelib**（71 条真 wav，带防重复轮换）；VITS 未装 |
+| TTS | 预生成语音库（~0ms） | **Windows SAPI 实时合成** → sherpa-onnx VITS → 纯字幕 | ✅ **voicelib+sapi**（语音库 71 条真 wav + SAPI 实时合成 LLM 的自由句，**音色同为 Huihui**）；VITS 未装 |
 | 传输 | gRPC | — | ✅ **grpc**（localhost:50051） |
 
 任一环节缺失都不影响启动：清空 `models/` 即退回 `规则引擎 + 语音库`，CLI 与全部测试照常可用。
@@ -150,7 +153,10 @@ powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.E
 ```
 
 - **指令先执行、台词后播放**：`DriveAction` 与文本流解耦，测试断言 `drive_action` 必须先于 `llm_delta`。
-- **TTS 四段路由**：① 语音库精确命中（~0ms）→ ② 实时 VITS → ③ 语音库按意图兜底 → ④ 纯字幕；命中词条但 wav 缺失时**不谎报 voicelib**。
+- **TTS 四段路由**：① 语音库精确命中（~0ms）→ ② 实时合成（**Windows SAPI**，VITS 就位时优先用它）→ ③ 语音库按意图兜底 → ④ 纯字幕；命中词条但 wav 缺失时**不谎报 voicelib**。
+  > **②为什么是 SAPI 而不是方案里的 VITS**：① VITS 中文模型在本机拿不到（GitHub Releases 被限速到 0.01 MB/s，ModelScope 无可用镜像）；
+  > ② 更关键 —— 那 71 条语料就是用本机 **SAPI Huihui** 合成的，同引擎做实时合成**音色完全一致**，
+  > 否则会变成「妹妹一句话换一个嗓门」。装上 VITS 后 `auto` 会自动优先用它。
 - **安全双层**：输入层命中敏感词直接出预置拒绝台词、不进 LLM；输出层再过一遍。
 - **指令三重守卫**：白名单 → 场景规则（如高速不许停车）→ 数值限幅（转向 ±0.8）。
 
@@ -186,7 +192,8 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only llm # 只�
 | LLM | `models/qwen2.5-7b-instruct-q4_k_m-0000{1,2}-of-00002.gguf` | ModelScope · Qwen2.5-7B-Instruct Q4_K_M · 3808+658 MB | ✅ 已验证（Vulkan，~100 tok/s） |
 | ASR | `models/sherpa-onnx-streaming-paraformer-bilingual-zh-en/` | ModelScope 镜像 · int8 · encoder 158 + decoder 68 + tokens MB | ✅ 已验证 |
 | VAD | `models/silero_vad.onnx` | GitHub releases · 0.6 MB | ✅ 已验证（7/7 样本恰好 1 次句尾） |
-| TTS | `models/vits-zh/` | 可选（实时合成）；语音库已可用 | 未下载 |
+| TTS | —（不需下载） | **Windows SAPI**（本机自带 Huihui 嗓音） | ✅ 已启用，妹妹能说出大模型现编的话 |
+| TTS（可选升级） | `models/vits-zh/` | 可选（音质更好）；装上后 auto 会优先用 VITS | 未下载 |
 
 > **下载源实测**：ModelScope 11–14 MB/s ✅ 首选；GitHub Releases 仅 0.01 MB/s ❌；常见 GitHub 代理 0.09–0.15 MB/s ❌；hf-mirror / huggingface.co 不可达 ❌。ASR 因此改用 ModelScope 的 int8 镜像（226 MB）而非 GitHub 的 1 GB tarball。
 
@@ -201,6 +208,8 @@ powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1   # 读 
 ## 配置要点（`src/Copilot.AIService/appsettings.json`）
 
 - `llm.backend` / `asr.backend` / `tts.backend` / `vad.backend`：`auto | <具体后端> | rule/none/voicelib/energy`
+- `tts.backend`：`auto`（**vits → sapi → 仅语音库**）| `voicelib`（关掉实时合成，只剩预生成 wav）| `vits` | `sapi`
+- `tts.sapi.voice`：SAPI 嗓音名，支持部分匹配（默认 `Huihui` → 命中 `Microsoft Huihui Desktop`）；`rate` −10..10（默认 −1，新手稍慢）；`volume` 0..100
 - `llm.useGrammar`：GBNF 约束解码开关（默认 `true`）。开启后**输出必然是合法 JSON、intent 必然是枚举值、action 必然是首字段**；文法解析失败会自动降级为「不约束」，不阻塞推理。
 - `tts.voicelibManifest`：语音库 manifest 位置（默认 `voice-corpus/manifest.json`）
 - `tts.sampleRate`：下行 PCM 采样率（默认 24000，与 `voice-corpus/wavs/` 一致）

@@ -31,6 +31,7 @@ public sealed class GrpcServerFixture : IAsyncLifetime
         // 否则一旦 models/ 里有 4.4GB 的 7B，测试会去加载真模型（又慢又依赖 GPU）。
         config.Llm.Backend = "rule";
         config.Asr.Backend = "none";
+        config.Tts.Backend = "voicelib"; // 钉死语音库：不让测试依赖本机 SAPI 嗓音（债 #8 同理）
         _runtime = AiRuntime.Create(config);
 
         _cts = new CancellationTokenSource();

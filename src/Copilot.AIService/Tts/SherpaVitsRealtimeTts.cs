@@ -85,20 +85,24 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
     public void Dispose() => _tts.Dispose();
 }
 
-/// <summary>TTS 实时后端工厂（语音库始终可用，实时合成按需）。</summary>
+/// <summary>
+/// TTS 实时后端工厂（语音库始终可用，实时合成按需）。
+/// `auto` 的优先级：**vits（模型在）→ sapi（Windows SAPI）→ 无（只剩语音库）**，
+/// 与 VAD 的 `silero → energy` 同一降级约定。两条实时链路都不在时，路由停在 ③ 按意图兜底。
+/// </summary>
 public static class RealtimeTtsFactory
 {
     public static IRealtimeTts? Create(Config config, out string detail)
     {
         var backend = (config.Tts.Backend ?? "auto").Trim().ToLowerInvariant();
-        if (backend == "voicelib")
+        if (backend == "voicelib" || backend == "none")
         {
             detail = "仅语音库（实时合成已禁用）";
             return null;
         }
 
         var modelsDir = config.ResolvePath(config.ModelsDir);
-        var engine = SherpaVitsRealtimeTts.TryCreate(config.Tts.Vits, modelsDir, out var reason);
+        var engine = SherpaVitsRealtimeTts.TryCreate(config.Tts.Vits, modelsDir, out var vitsReason);
         if (engine != null)
         {
             detail = "sherpa-vits（实时合成已就绪）";
@@ -107,10 +111,22 @@ public static class RealtimeTtsFactory
 
         if (backend == "vits")
         {
-            throw new InvalidOperationException($"指定 vits 后端但不可用：{reason}");
+            throw new InvalidOperationException($"指定 vits 后端但不可用：{vitsReason}");
         }
 
-        detail = $"仅语音库（{reason}）";
+        var sapi = WindowsSapiTts.TryCreate(config.Tts.Sapi, out var sapiReason);
+        if (sapi != null)
+        {
+            detail = $"sapi（{sapi.VoiceName}）—— 实时合成已就绪；{vitsReason}";
+            return sapi;
+        }
+
+        if (backend == "sapi")
+        {
+            throw new InvalidOperationException($"指定 sapi 后端但不可用：{sapiReason}");
+        }
+
+        detail = $"仅语音库（{vitsReason}；SAPI 也不可用：{sapiReason}）";
         return null;
     }
 }

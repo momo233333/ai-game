@@ -138,6 +138,8 @@ public class AiRuntimeTests
         var config = Config.Load();
         config.Llm.Backend = "rule";
         config.Asr.Backend = "none";
+        // 钉死语音库：不让测试依赖本机 SAPI 嗓音（auto 会启用实时合成，结果就跟着机器走了）
+        config.Tts.Backend = "voicelib";
 
         using var runtime = AiRuntime.Create(config);
 
@@ -154,6 +156,7 @@ public class AiRuntimeTests
         var config = Config.Load();
         config.Llm.Backend = "rule";
         config.Asr.Backend = "none";
+        config.Tts.Backend = "voicelib";
         using var runtime = AiRuntime.Create(config);
 
         var events = await runtime.Pipeline.RunTextTurnAsync("靠边停车", runtime.CurrentState);
@@ -168,6 +171,7 @@ public class AiRuntimeTests
         var config = Config.Load();
         config.Llm.Backend = "rule";
         config.Asr.Backend = "none";
+        config.Tts.Backend = "voicelib";
         using var runtime = AiRuntime.Create(config);
 
         runtime.UpdateState(new GameStateSnapshot { Trust = 12f, Emotion = Emotion.Annoyed });
@@ -182,6 +186,7 @@ public class AiRuntimeTests
     {
         var config = Config.Load();
         config.Llm.Backend = "rule";
+        config.Tts.Backend = "voicelib";
 
         using var runtime = AiRuntime.Create(config);
         Assert.Equal("rule", runtime.Llm.Name);

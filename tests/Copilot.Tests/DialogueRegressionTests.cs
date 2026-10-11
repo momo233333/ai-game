@@ -208,6 +208,7 @@ public class DialogueRegressionTests
         var config = Config.Load();
         config.Llm.Backend = "rule";
         config.Asr.Backend = "none";
+        config.Tts.Backend = "voicelib"; // 钉死语音库：不让测试依赖本机 SAPI 嗓音（债 #8 同理）
         using var runtime = AiRuntime.Create(config);
 
         var results = await RunAllAsync(runtime.Pipeline, strictIntent: true);
@@ -231,6 +232,7 @@ public class DialogueRegressionTests
 
         var config = Config.Load();
         config.Asr.Backend = "none";
+        config.Tts.Backend = "voicelib"; // 同上：台词走语音库，不受本机 SAPI 嗓音影响
         using var runtime = AiRuntime.Create(config, Console.WriteLine);
 
         // 防止「权重缺失 → 静默降级成 rule」导致这条用例名不副实

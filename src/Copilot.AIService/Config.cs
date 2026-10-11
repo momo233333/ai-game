@@ -94,11 +94,12 @@ public sealed class Config
 
     public sealed class TtsOptions
     {
-        /// <summary>auto | voicelib | vits</summary>
+        /// <summary>auto | voicelib | vits | sapi。auto = vits（模型在）→ sapi（Windows SAPI）→ 仅语音库。</summary>
         public string Backend { get; set; } = "auto";
         public string VoicelibManifest { get; set; } = "voice-corpus/manifest.json";
         public int SampleRate { get; set; } = 24000;
         public VitsOptions Vits { get; set; } = new();
+        public SapiOptions Sapi { get; set; } = new();
 
         public sealed class VitsOptions
         {
@@ -106,6 +107,25 @@ public sealed class Config
             public string Tokens { get; set; } = "vits-zh/tokens.txt";
             public string Lexicon { get; set; } = "vits-zh/lexicon.txt";
             public int NumThreads { get; set; } = 2;
+        }
+
+        /// <summary>
+        /// Windows SAPI 实时合成（<c>Tts/WindowsSapiTts.cs</c>）—— 语音库 71 条就是用它合成的，
+        /// 所以**音色与语音库一致**，不会出现「同一句台词换一个嗓门」。
+        /// </summary>
+        public sealed class SapiOptions
+        {
+            /// <summary>嗓音名，支持部分匹配（"Huihui" 即可选中 "Microsoft Huihui Desktop"）；空串用系统默认。</summary>
+            public string Voice { get; set; } = "Huihui";
+
+            /// <summary>语速，SAPI 取值 -10..10（0 = 正常）。小雅是新手，稍慢一点更像学生。</summary>
+            public int Rate { get; set; } = -1;
+
+            /// <summary>音量 0..100。</summary>
+            public int Volume { get; set; } = 100;
+
+            /// <summary>下行采样率，与 <see cref="TtsOptions.SampleRate"/> 保持一致的约定。</summary>
+            public int SampleRate { get; set; } = 24000;
         }
     }
 

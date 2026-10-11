@@ -2,13 +2,16 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- Windows 专用：NAudio / sherpa-onnx win-x64 runtime / System.Speech(SAPI 实时合成) 都只跑在 Windows -->
+    <TargetFramework>net8.0-windows</TargetFramework>
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Copilot.AIService</RootNamespace>
     <AssemblyName>Copilot.AIService</AssemblyName>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- 必须 false：System.Speech（SAPI 实时合成）内部依赖 CultureInfo 枚举嗓音，
+         打开不变模式会让 GetInstalledVoices() 直接抛 NullReferenceException -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <Version>0.1.0</Version>
   </PropertyGroup>
@@ -29,6 +32,8 @@
     <PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.8" />
     <!-- 麦克风采集与 wav 读写（语音交互自测） -->
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- 实时 TTS：Windows SAPI（System.Speech）。见 Tts/WindowsSapiTts.cs 的选型说明 -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
   </ItemGroup>
 
