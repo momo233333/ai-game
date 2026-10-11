@@ -1,6 +1,6 @@
-# 《副驾指令》游戏原型
+# 《驾考宝典》游戏原型
 
-本地 AI 语音交互驾驶模拟游戏。**主线为 V2.0 全 C# 架构**（见 [`IT方案1.md`](IT方案1.md)）：
+本地 AI 语音交互驾驶教学游戏。**主线为 V2.0 全 C# 架构**（见 [`IT方案1.md`](IT方案1.md)）：
 Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR / LLM / TTS 全本地推理），两者同语言、共享契约与纯逻辑类库。
 
 > **开发进度 / 环境快照 / 已知问题 / 下一步** 见 [`开发进度.md`](开发进度.md) —— 每次开工先读它，完成阶段后更新它。
@@ -38,11 +38,11 @@ ai-game/
 ├── Copilot.sln                 # ★ V2.0 解决方案
 ├── src/
 │   ├── Copilot.Contracts/      # proto → C# gRPC 契约（netstandard2.1）
-│   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信任情绪/语音库/编排（netstandard2.1，Unity 可引用）
+│   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信心情绪/语音库/编排/关卡（netstandard2.1，Unity 可引用）
 │   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 130 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
+│   ├── Copilot.Tests/          # xUnit 135 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：32 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
@@ -69,7 +69,7 @@ cd e:\AI_Workplace\AI_Game\ai-game
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（130 项）
+# 1) 编译（0 警告 0 错误）+ 测试（135 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -77,7 +77,7 @@ dotnet test Copilot.sln
 dotnet run --project src\Copilot.AIService -- --health
 
 # 3) 单条指令端到端（真 LLM）
-dotnet run --project src\Copilot.AIService -- --text "前面路口左转"
+dotnet run --project src\Copilot.AIService -- --text "起步，慢慢来"
 # [启动] 后端装配（含模型加载）2806 ms
 #   [玩家] 前面路口左转
 #   [动作] ↰左转 steering=-0.60 throttle=0.30 brake=0.00 hold=1200ms
@@ -106,23 +106,26 @@ Get-Content logs\dialogue_regression_规则后端.log          # 首次运行后
 # 真 LLM 后端版（默认跳过；需 models/ 约 4.6GB，约 1s/条）
 $env:COPILOT_LLM_REGRESSION=1; dotnet test Copilot.sln --filter "FullyQualifiedName~DialogueRegressionTests"
 
-# 8) Unity 接入（P8）—— 先起服务端，再把共享库 DLL 拷进 Unity 工程
+# 8) Unity 接入（P8/P9）—— 先起服务端，再把共享库 DLL 拷进 Unity 工程
 dotnet run --project src\Copilot.AIService -- --server          # 保持这个窗口开着
+# ⚠️ 只要改过 src/ 下的 Copilot.Core / Contracts / Client，就必须重跑这一步：
+#    Unity 用的是 unity/Assets/Plugins/Copilot 里的**预编译 DLL**，不参与编译 src/，
+#    忘了重跑会报 “error CS0234: 命名空间不存在” —— 看着像代码错，其实是 DLL 旧了。
 powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
 # 用 Unity **2022.3 LTS** 打开 unity\ 目录（工程已在本机 2022.3.62f3c1 上验证过编译与连通）
-# 菜单「副驾指令 / 生成灰盒场景」一键生成 Assets/Scenes/Greybox.unity（车+相机+HUD+装配全连好）
-# 打开 Greybox 按 Play → 按住空格说话
+# 菜单「副驾指令 / 生成灰盒场景」一键生成 Assets/Scenes/Greybox.unity
+# 打开 Greybox 按 Play → 按住空格说话（教小雅开车）；Q/E 或按住鼠标右键扭头看她
 
-# 9) Unity 侧的两条自检（编辑器菜单也能点，见「副驾指令」菜单）
-#    ① 连通性自检：文本回合 + 语音回合（真 ASR）两条腿
-& "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
-  -executeMethod Copilot.EditorTools.SmokeTest.Run -logFile logs\unity_smoke.log
-#    ② 场景结构自检：逐项断言生成场景里该连的引用都连上了（含楼群/路灯等数量断言）
-& "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
-  -executeMethod Copilot.EditorTools.SceneBuilder.ValidateAndExit -logFile logs\unity_validate.log
-#    ③ 渲染一张场景预览图（batchmode 看不见画面时的唯一办法）→ logs\unity_scene_preview.png
-& "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
-  -executeMethod Copilot.EditorTools.SceneBuilder.CaptureAndExit -logFile logs\unity_preview.log
+# 9) Unity 侧自检（编辑器菜单也能点，见「副驾指令」菜单）
+#    推荐用这个脚本跑：它会先杀残留 Unity、轮询到进程退出再跑下一个
+#    （直接 Start-Process -Wait 连跑多个会抢 unity/Temp/UnityLockfile 导致编辑器崩溃）
+powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -All
+#    单跑某个方法：
+powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.EditorTools.SmokeTest.Run
+#      · SmokeTest.Run        连通性自检：文本回合 + 语音回合（真 ASR）
+#      · SceneBuilder.BuildAndExit     重新生成 Assets/Scenes/Greybox.unity
+#      · SceneBuilder.ValidateAndExit  场景结构自检（引用 + 内容数量断言）
+#      · SceneBuilder.CaptureAndExit   渲染预览图 → logs\unity_scene_preview*.png
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。

@@ -97,6 +97,13 @@ namespace Copilot.UI
             }
         }
 
+        /// <summary>直接上屏一句话（不走打字机）——给关卡播报之类的外部调用用。</summary>
+        public void ShowLine(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            SetImmediate(text);
+        }
+
         void BeginLine()
         {
             if (_active) return;

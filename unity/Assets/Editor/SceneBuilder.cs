@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using Copilot.AI;
 using Copilot.Audio;
+using Copilot.Gameplay;
 using Copilot.State;
 using Copilot.UI;
 using Copilot.Vehicle;
@@ -40,6 +41,7 @@ namespace Copilot.EditorTools
         const string ScenePath = SceneDir + "/Greybox.unity";
         const string ProfilePath = "Assets/VehiclePhysicsProfile.asset";
         const string PreviewRelativePath = "logs/unity_scene_preview.png";
+        const string DriverPreviewRelativePath = "logs/unity_scene_preview_driver.png";
 
         const string RigName = "CopilotRig";
         const string CarName = "Car";
@@ -60,6 +62,7 @@ namespace Copilot.EditorTools
         static Material _bldA, _bldB, _bldC, _window, _roof;
         static Material _pole, _lamp;
         static Material _body, _glass, _tire, _rim, _lightFront, _lightRear, _cone;
+        static Material _dash, _console, _seat, _cabinTrim, _skin, _hair, _cloth, _mirror;
 
         [MenuItem("副驾指令/生成灰盒场景")]
         public static void BuildFromMenu()
@@ -115,8 +118,7 @@ namespace Copilot.EditorTools
 
             var profile = EnsureProfile();
             var city = CreateCity();
-            var car = CreateVehicle(profile, city.transform);
-            CreateCamera(car.transform);
+            var car = CreateVehicle(profile, city.transform);   // 相机随车一起建（第一人称副驾座）
             var rig = CreateRig(car);
             CreateHud(rig);
 
@@ -157,6 +159,16 @@ namespace Copilot.EditorTools
             _lightFront = MakeMaterial(new Color(1f, 0.98f, 0.85f), new Color(1f, 0.97f, 0.8f) * 1.5f);
             _lightRear = MakeMaterial(new Color(0.9f, 0.15f, 0.12f), new Color(1f, 0.15f, 0.1f) * 1.5f);
             _cone = MakeMaterial(new Color(0.95f, 0.45f, 0.10f));
+
+            // 车内（第一人称副驾视角要看到的东西）
+            _dash = MakeMaterial(new Color(0.16f, 0.16f, 0.17f));
+            _console = MakeMaterial(new Color(0.11f, 0.11f, 0.12f));
+            _seat = MakeMaterial(new Color(0.20f, 0.19f, 0.20f));
+            _cabinTrim = MakeMaterial(new Color(0.34f, 0.34f, 0.35f));
+            _mirror = MakeMaterial(new Color(0.10f, 0.11f, 0.13f));
+            _skin = MakeMaterial(new Color(0.93f, 0.80f, 0.70f));
+            _hair = MakeMaterial(new Color(0.15f, 0.11f, 0.10f));
+            _cloth = MakeMaterial(new Color(0.42f, 0.52f, 0.68f));   // 学员的衣服
         }
 
         static void SetupEnvironment()
@@ -337,14 +349,16 @@ namespace Copilot.EditorTools
         static GameObject CreateVehicle(VehiclePhysicsProfile profile, Transform parent)
         {
             var car = new GameObject(CarName);
-            car.transform.position = new Vector3(1.8f, 0.55f, 0f); // 靠右行驶：右内侧车道（x>0）
+            car.transform.position = new Vector3(1.8f, 0.0f, 0f); // 靠右行驶：右内侧车道（x>0）
 
             var body = car.AddComponent<Rigidbody>();
             body.mass = 1400f;
             body.drag = 0.02f;          // 2022.3 是 drag/angularDrag（Unity 6 才改名 linearDamping）
             body.angularDrag = 0.4f;
 
-            BuildCarBody(car.transform, new Color(0.72f, 0.18f, 0.16f), withWheels: true);
+            // 玩家的车要「敞篷」：不开顶盖的实心 Cabin，改由车内件（顶棚/A柱/门板）拼，
+            // 否则第一人称相机就坐在实心盒子里，朝前看是一片黑。
+            BuildCarBody(car.transform, new Color(0.72f, 0.18f, 0.16f), withWheels: true, openCabin: true);
 
             var controller = car.AddComponent<VehicleController>();
             controller.profile = profile;
@@ -360,14 +374,114 @@ namespace Copilot.EditorTools
             controller.meshRearLeft = meshRL;
             controller.meshRearRight = meshRR;
 
+            CreateInterior(car.transform, controller);
+            CreateCockpitCamera(car.transform);
             return car;
+        }
+
+        // ---- 车内（第一人称副驾视角） ----------------------------------
+
+        /// <summary>
+        /// 车内件 + 驾驶位上的学员。坐标约定：车头朝 +Z、+X 是车的右侧
+        /// —— 所以**驾驶位在 x&lt;0（左舵）**，副驾（相机）在 x&gt;0。
+        /// 所有车内件都不带碰撞体：它们套在车体碰撞盒里，多一层只会徒增抖动。
+        /// </summary>
+        static void CreateInterior(Transform car, VehicleController controller)
+        {
+            // 顶棚 / 后隔板 / 两侧门板 / A 柱 / 前挡上沿 —— 拼出「有壳但不挡视线」的座舱
+            Box("Roof", car, new Vector3(0f, 1.52f, -0.15f), new Vector3(1.68f, 0.07f, 2.1f), _cabinTrim, withCollider: false);
+            Box("RearBulkhead", car, new Vector3(0f, 1.12f, -1.42f), new Vector3(1.66f, 0.8f, 0.08f), _cabinTrim, withCollider: false);
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Box("DoorPanel", car, new Vector3(sx * 0.86f, 0.86f, -0.2f), new Vector3(0.06f, 0.62f, 2.0f), _cabinTrim, withCollider: false);
+                Box("APillar", car, new Vector3(sx * 0.74f, 1.3f, 0.92f), new Vector3(0.1f, 0.56f, 0.1f), _cabinTrim, withCollider: false);
+            }
+            Box("Header", car, new Vector3(0f, 1.5f, 1.0f), new Vector3(1.62f, 0.1f, 0.1f), _cabinTrim, withCollider: false);
+
+            // 车内地板：车身的顶面（红色）同时也是引擎盖，不加这块的话座位前方会是一片红
+            Box("Floor", car, new Vector3(0f, 0.885f, -0.25f), new Vector3(1.66f, 0.02f, 2.1f), _dash, withCollider: false);
+
+            // 仪表台 + 中控 + 转向柱
+            // 仪表台顶面 0.98，比视线（相机 y=1.26）低 0.28 —— 刚好挡住近处的引擎盖，
+            // 只留远处一小条；再低就露出红色顶面，再高就变成一堵墙（两个极端都试过了）。
+            Box("Dash", car, new Vector3(0f, 0.86f, 0.95f), new Vector3(1.64f, 0.24f, 0.7f), _dash, withCollider: false);
+            Box("Console", car, new Vector3(0f, 0.7f, 0.05f), new Vector3(0.34f, 0.34f, 1.4f), _console, withCollider: false);
+            Box("SteeringColumn", car, new Vector3(-0.42f, 0.86f, 0.66f), new Vector3(0.09f, 0.09f, 0.34f), _console, withCollider: false);
+
+            // 后视镜
+            Box("MirrorStalk", car, new Vector3(0f, 1.42f, 0.86f), new Vector3(0.04f, 0.12f, 0.04f), _console, withCollider: false);
+            Box("RearViewMirror", car, new Vector3(0f, 1.36f, 0.86f), new Vector3(0.34f, 0.1f, 0.04f), _mirror, withCollider: false);
+
+            // 座椅（驾驶位 + 副驾）
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                float x = sx * 0.42f;
+                Box("SeatBack", car, new Vector3(x, 1.02f, -0.62f), new Vector3(0.62f, 0.98f, 0.16f), _seat, withCollider: false);
+                Box("SeatCushion", car, new Vector3(x, 0.72f, -0.22f), new Vector3(0.62f, 0.14f, 0.7f), _seat, withCollider: false);
+            }
+
+            // 方向盘（脚本驱动转动）+ 盘辐让转动看得出来
+            var wheelRoot = new GameObject("SteeringWheel");
+            wheelRoot.transform.SetParent(car, false);
+            wheelRoot.transform.localPosition = new Vector3(-0.42f, 0.92f, 0.48f);
+
+            Cylinder("Disc", wheelRoot.transform, Vector3.zero, new Vector3(0.36f, 0.035f, 0.36f), _console,
+                Quaternion.Euler(90f, 0f, 0f), withCollider: false);
+            Box("SpokeH", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.34f, 0.035f, 0.03f), _cabinTrim, withCollider: false);
+            Box("SpokeV", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.035f, 0.34f, 0.03f), _cabinTrim, withCollider: false);
+
+            var wheel = wheelRoot.AddComponent<SteeringWheel>();
+            wheel.vehicle = controller;
+
+            CreateDriverAvatar(car, wheel);
+        }
+
+        /// <summary>驾驶位上的学员小雅（基本体拼的人形）。说话时会扭头看教练，由 <see cref="CreateRig"/> 接上 ttsPlayer。</summary>
+        static void CreateDriverAvatar(Transform car, SteeringWheel wheel)
+        {
+            var avatar = new GameObject("DriverAvatar");
+            avatar.transform.SetParent(car, false);
+            avatar.transform.localPosition = new Vector3(-0.42f, 0.68f, -0.2f);
+
+            Box("Torso", avatar.transform, new Vector3(0f, 0.24f, 0.02f), new Vector3(0.38f, 0.52f, 0.26f), _cloth, withCollider: false);
+
+            var head = new GameObject("Head").transform;
+            head.SetParent(avatar.transform, false);
+            head.localPosition = new Vector3(0f, 0.62f, 0.02f);
+            Cylinder("Face", head, new Vector3(0f, 0f, 0.02f), new Vector3(0.24f, 0.12f, 0.24f), _skin, Quaternion.Euler(90f, 0f, 0f), withCollider: false);
+            Cylinder("Hair", head, new Vector3(0f, 0.03f, -0.03f), new Vector3(0.25f, 0.1f, 0.25f), _hair, Quaternion.Euler(90f, 0f, 0f), withCollider: false);
+
+            // 两只前臂伸向方向盘（DriverAvatar 让它们跟着盘转）
+            var leftArm = new GameObject("ArmL").transform;
+            leftArm.SetParent(avatar.transform, false);
+            leftArm.localPosition = new Vector3(-0.1f, 0.3f, 0.3f);
+            leftArm.localRotation = Quaternion.Euler(-18f, 0f, 0f);
+            Box("ForearmL", leftArm, new Vector3(0f, 0f, 0.24f), new Vector3(0.1f, 0.1f, 0.5f), _cloth, withCollider: false);
+            Box("HandL", leftArm, new Vector3(0f, 0f, 0.48f), new Vector3(0.11f, 0.11f, 0.12f), _skin, withCollider: false);
+
+            var rightArm = new GameObject("ArmR").transform;
+            rightArm.SetParent(avatar.transform, false);
+            rightArm.localPosition = new Vector3(0.1f, 0.3f, 0.3f);
+            rightArm.localRotation = Quaternion.Euler(-18f, 0f, 0f);
+            Box("ForearmR", rightArm, new Vector3(0f, 0f, 0.24f), new Vector3(0.1f, 0.1f, 0.5f), _cloth, withCollider: false);
+            Box("HandR", rightArm, new Vector3(0f, 0f, 0.48f), new Vector3(0.11f, 0.11f, 0.12f), _skin, withCollider: false);
+
+            var driver = avatar.AddComponent<DriverAvatar>();
+            driver.wheel = wheel;
+            driver.head = head;
+            driver.leftArm = leftArm;
+            driver.rightArm = rightArm;
         }
 
         /// <summary>
         /// 用基本体拼一台「看得出是车」的车（供玩家车与路边停车共用）。
         /// 真车模到位后整个换掉这里即可，WheelCollider 的挂点由 <see cref="AddWheel"/> 负责，不受影响。
         /// </summary>
-        static void BuildCarBody(Transform root, Color color, bool withWheels)
+        /// <param name="openCabin">
+        /// true = 不建实心驾驶舱与玻璃（玩家的车用：由 <see cref="CreateInterior"/> 拼出中空的座舱，
+        /// 否则第一人称相机就在实心盒子里，朝前看是一片黑）；false = 路边停车那种整块外壳。
+        /// </param>
+        static void BuildCarBody(Transform root, Color color, bool withWheels, bool openCabin = false)
         {
             var bodyMat = MakeMaterial(color);
 
@@ -376,14 +490,17 @@ namespace Copilot.EditorTools
             Box("Hood", root, new Vector3(0f, 0.92f, 1.35f), new Vector3(1.72f, 0.22f, 1.4f), bodyMat);
             Box("Trunk", root, new Vector3(0f, 0.92f, -1.45f), new Vector3(1.72f, 0.22f, 1.1f), bodyMat);
 
-            // 驾驶舱（略窄、偏后）
-            Box("Cabin", root, new Vector3(0f, 1.14f, -0.25f), new Vector3(1.6f, 0.56f, 2f), bodyMat);
+            if (!openCabin)
+            {
+                // 驾驶舱（略窄、偏后）
+                Box("Cabin", root, new Vector3(0f, 1.14f, -0.25f), new Vector3(1.6f, 0.56f, 2f), bodyMat);
 
-            // 玻璃：前风挡 / 后风挡 / 两侧窗
-            Box("Windshield", root, new Vector3(0f, 1.12f, 0.78f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
-            Box("RearGlass", root, new Vector3(0f, 1.12f, -1.28f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
-            Box("SideGlassL", root, new Vector3(-0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
-            Box("SideGlassR", root, new Vector3(0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
+                // 玻璃：前风挡 / 后风挡 / 两侧窗
+                Box("Windshield", root, new Vector3(0f, 1.12f, 0.78f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
+                Box("RearGlass", root, new Vector3(0f, 1.12f, -1.28f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
+                Box("SideGlassL", root, new Vector3(-0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
+                Box("SideGlassR", root, new Vector3(0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
+            }
 
             // 灯
             Box("HeadL", root, new Vector3(-0.62f, 0.78f, 2.08f), new Vector3(0.42f, 0.18f, 0.08f), _lightFront);
@@ -453,20 +570,30 @@ namespace Copilot.EditorTools
             return collider;
         }
 
-        static void CreateCamera(Transform target)
+        /// <summary>
+        /// 第一人称副驾相机：**挂在 Car 下面**，localPosition 就是副驾座，随车身一起动。
+        /// 近裁剪面调到 0.05，否则仪表台/方向盘会被裁掉一片。
+        /// </summary>
+        static void CreateCockpitCamera(Transform car)
         {
-            // 新场景是空的，没有自带相机
             var go = new GameObject("Main Camera");
             go.tag = "MainCamera";
+            go.transform.SetParent(car, false);
+            // 相机再往右后挪一点、并朝驾驶位偏 12°，这样正前方就能同时看到路和学员的侧脸
+            go.transform.localPosition = new Vector3(0.52f, 1.26f, -0.42f);   // 副驾座（左舵车：驾驶位在 x<0）
+            go.transform.localRotation = Quaternion.identity;
+
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.62f, 0.72f, 0.82f);
             cam.farClipPlane = 800f;
+            cam.nearClipPlane = 0.05f;
+            cam.fieldOfView = 68f;      // 车内视角视野开一点，看得出车速感
             go.AddComponent<AudioListener>();
 
-            var chase = go.AddComponent<ChaseCamera>();
-            chase.target = target;
-            go.transform.position = target.TransformPoint(chase.offset);
+            var cockpit = go.AddComponent<CockpitCamera>();
+            cockpit.allowLook = true;
+            cockpit.restYaw = -12f;
         }
 
         static GameObject CreateRig(GameObject car)
@@ -505,6 +632,10 @@ namespace Copilot.EditorTools
             bootstrap.ttsPlayer = tts;
             bootstrap.mic = mic;
             bootstrap.hud = hud;
+
+            // 学员说话时扭头看教练 —— ttsPlayer 在 rig 上，所以只能建完 rig 再回填
+            var avatar = car.GetComponentInChildren<DriverAvatar>(true);
+            if (avatar != null) avatar.ttsPlayer = tts;
 
             return rig;
         }
@@ -552,9 +683,18 @@ namespace Copilot.EditorTools
                 new Vector2(0.15f, 1f), new Vector2(0.85f, 1f), new Vector2(0f, -150f), new Vector2(0f, -110f),
                 new Color(1f, 0.9f, 0.55f, 1f));
 
-            NewText("Hint", root, "按住空格说话 · 文本调试见 CopilotBootstrap.SendInstruction", 20,
+            NewText("Hint", root, "按住空格说话 · Q/E 或按住鼠标右键扭头看学员", 20,
                 TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(0f, 0f),
                 new Vector2(30f, 30f), new Vector2(900f, 60f), new Color(1f, 1f, 1f, 0.6f));
+
+            // 教学关：当前步骤 + 结果播报（科目一 · 上车第一课）
+            var stepLabel = NewText("StepLabel", root, "", 24, TextAnchor.UpperLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -232f), new Vector2(900f, -108f),
+                new Color(0.95f, 0.97f, 1f, 0.92f));
+
+            var resultLabel = NewText("ResultLabel", root, "", 22, TextAnchor.UpperLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -272f), new Vector2(900f, -236f),
+                new Color(0.6f, 0.95f, 0.7f, 1f));
 
             var bubble = rig.AddComponent<DialogueBubble>();
             bubble.connection = rig.GetComponent<CopilotConnection>();
@@ -563,6 +703,12 @@ namespace Copilot.EditorTools
             // 装配方（CopilotBootstrap）也要拿到 bubble —— 漏掉这条它就不会 Rebind
             var bootstrap = rig.GetComponent<CopilotBootstrap>();
             if (bootstrap != null) bootstrap.bubble = bubble;
+
+            var tutorial = rig.AddComponent<TutorialDirector>();
+            tutorial.connection = rig.GetComponent<CopilotConnection>();
+            tutorial.stepLabel = stepLabel;
+            tutorial.resultLabel = resultLabel;
+            tutorial.bubble = bubble;
 
             var hud = rig.GetComponent<HudStatus>();
             hud.trustBar = barFill;
@@ -586,7 +732,8 @@ namespace Copilot.EditorTools
             return mat;
         }
 
-        static GameObject Box(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)
+        static GameObject Box(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat,
+            bool withCollider = true)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = name;
@@ -594,17 +741,21 @@ namespace Copilot.EditorTools
             go.transform.localPosition = localPos;
             go.transform.localScale = scale;
             go.GetComponent<Renderer>().sharedMaterial = mat;
+            if (!withCollider) UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
             return go;
         }
 
-        static GameObject Cylinder(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)
+        static GameObject Cylinder(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat,
+            Quaternion? localRotation = null, bool withCollider = true)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             go.name = name;
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPos;
             go.transform.localScale = scale;
+            if (localRotation.HasValue) go.transform.localRotation = localRotation.Value;
             go.GetComponent<Renderer>().sharedMaterial = mat;
+            if (!withCollider) UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
             return go;
         }
 
@@ -700,9 +851,22 @@ namespace Copilot.EditorTools
             Requires(bubble != null && bubble.label != null, "DialogueBubble.label 未连", problems);
             Requires(bubble != null && bubble.connection != null, "DialogueBubble.connection 未连", problems);
 
-            var chase = FindInScene<ChaseCamera>(scene);
-            Requires(chase != null && chase.target != null, "ChaseCamera.target 未连", problems);
-            Requires(FindInScene<Camera>(scene) != null, "场景里没有 Camera", problems);
+            var cockpit = FindInScene<CockpitCamera>(scene);
+            var cam = FindInScene<Camera>(scene);
+            Requires(cam != null, "场景里没有 Camera", problems);
+            Requires(cockpit != null, "场景里没有第一人称副驾相机 CockpitCamera", problems);
+
+            // 第一人称的核心：相机必须是 Car 的子物体（坐在车里），而不是车外跟随
+            Requires(cam != null && cam.transform.parent != null && cam.transform.parent.name == CarName,
+                "相机没挂在车内（应为 Car 的子物体）", problems);
+
+            Requires(FindInScene<SteeringWheel>(scene) != null, "场景里没有方向盘", problems);
+            Requires(FindInScene<DriverAvatar>(scene) != null, "驾驶位上没有学员模型", problems);
+
+            var tutorial = FindInScene<TutorialDirector>(scene);
+            Requires(tutorial != null, "场景里没有教学关导演 TutorialDirector", problems);
+            Requires(tutorial != null && tutorial.stepLabel != null, "TutorialDirector.stepLabel 未连", problems);
+            Requires(CountInScene(scene, "Dash") >= 1, "没有仪表台，车内是空的", problems);
 
             // 场景内容：确认 P9 的城市几何真的生成了（空场景也能「校验通过」就没意义了）
             Requires(CountInScene(scene, "Building") >= 10, "楼群数量不足（<10），城市没生成", problems);
@@ -722,8 +886,8 @@ namespace Copilot.EditorTools
         ///
         /// 存在的理由：`-batchmode` 下没法用眼睛看，容易被「结构校验通过」骗过去 ——
         /// 引用都连上了不代表画面对。这里用 <c>Camera.Render</c> 渲到 RenderTexture 再存盘，
-        /// 人和 CI 都能直接看图。<c>ChaseCamera</c> 在编辑模式不跑，相机停在生成时摆的位置，
-        /// 所以看到的就是开局镜头。
+        /// 人和 CI 都能直接看图。<see cref="CockpitCamera"/> 在编辑模式不跑，相机就停在
+        /// 生成时摆的副驾座上，所以看到的就是开局镜头。
         /// </summary>
         public static string Capture()
         {
@@ -731,16 +895,30 @@ namespace Copilot.EditorTools
             var cam = FindInScene<Camera>(scene);
             if (cam == null) throw new InvalidOperationException("场景里没有 Camera");
 
+            // 一张不够：副驾往前看时，坐在你左边的学员**本来就不在视野里**（跟真车一样）。
+            // 所以再渲一张「扭头看学员」的，否则没法确认人形到底建出来没有。
+            var cockpit = FindInScene<CockpitCamera>(scene);
+            float restYaw = cockpit != null ? cockpit.restYaw : 0f;
+            var forward = CaptureView(cam, Quaternion.Euler(0f, restYaw, 0f), PreviewRelativePath);
+            CaptureView(cam, Quaternion.Euler(0f, -58f, 0f), DriverPreviewRelativePath);
+            return forward;
+        }
+
+        /// <summary>把相机摆到指定姿态渲一帧存 PNG，然后还原。</summary>
+        static string CaptureView(Camera cam, Quaternion localRotation, string relativePath)
+        {
             const int width = 1280;
             const int height = 720;
-            var path = RepoPath(PreviewRelativePath);
+            var path = RepoPath(relativePath);
 
             var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
             var previousTarget = cam.targetTexture;
             var previousActive = RenderTexture.active;
+            var previousRotation = cam.transform.localRotation;
 
             try
             {
+                cam.transform.localRotation = localRotation;
                 cam.targetTexture = rt;
                 cam.Render();
 
@@ -754,11 +932,12 @@ namespace Copilot.EditorTools
                 File.WriteAllBytes(path, png);
 
                 UnityEngine.Object.DestroyImmediate(tex);
-                Debug.Log($"[SceneBuilder] 预览图已生成：{path}（{png.Length / 1024} KB）");
+                Debug.Log($"[SceneBuilder] 预览图：{path}（{png.Length / 1024} KB）");
                 return path;
             }
             finally
             {
+                cam.transform.localRotation = previousRotation;
                 cam.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(rt);

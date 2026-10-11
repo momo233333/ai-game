@@ -1,5 +1,6 @@
 using System.Linq;
 using Copilot.Core;
+using Copilot.Core.Levels;
 using Copilot.Core.Llm;
 using Xunit;
 
@@ -371,5 +372,81 @@ public class OutputGrammarTests
     {
         // JSON 的 null 本来就不带引号，别顺手也去加引号
         Assert.Contains("hint     ::= \"null\"", OutputGrammar.Gbnf);
+    }
+}
+
+// ---- 关卡（《驾考宝典》）----
+
+public class TutorialProgressTests
+{
+    [Fact]
+    public void 按顺序做对动作_逐步推进直到完成()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+
+        Assert.False(progress.IsCompleted);
+        Assert.NotNull(progress.Current);
+
+        foreach (var step in LevelCatalog.Subject1Tutorial.Steps)
+        {
+            Assert.False(progress.IsCompleted, $"「{step.Title}」还没做就不该完成");
+            Assert.Equal(step.Title, progress.Current!.Title);
+            Assert.True(progress.Observe(step.AcceptIntents[0]), $"做对「{step.Title}」应推进");
+        }
+
+        Assert.True(progress.IsCompleted);
+        Assert.Null(progress.Current);
+    }
+
+    [Fact]
+    public void 做错动作不推进也不倒退()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        var first = progress.Current!;
+
+        // 第一步要的是起步（ACCELERATE），这里给左转、给拒绝、给反问都不该动
+        Assert.False(progress.Observe(Intents.TurnLeft));
+        Assert.False(progress.Observe(Intents.Ignore));
+        Assert.False(progress.Observe(Intents.QuestionBack));
+        Assert.False(progress.Observe(null));
+        Assert.False(progress.Observe(string.Empty));
+
+        Assert.Equal(0, progress.StepIndex);
+        Assert.Equal(first.Title, progress.Current!.Title);
+    }
+
+    [Fact]
+    public void 完成后不再接受任何动作()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        foreach (var step in LevelCatalog.Subject1Tutorial.Steps) progress.Observe(step.AcceptIntents[0]);
+
+        Assert.True(progress.IsCompleted);
+        Assert.False(progress.Observe(Intents.Accelerate));
+        Assert.True(progress.IsCompleted);
+    }
+
+    [Fact]
+    public void 每一步都有示例口令与可接受动作_HUD才不会没话说()
+    {
+        foreach (var level in LevelCatalog.All)
+        {
+            foreach (var step in level.Steps)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(step.Title));
+                Assert.False(string.IsNullOrWhiteSpace(step.Instruction));
+                Assert.False(string.IsNullOrWhiteSpace(step.ExamplePhrase));
+                Assert.NotEmpty(step.AcceptIntents);
+            }
+        }
+    }
+
+    [Fact]
+    public void 教学关之后还有科目二三四_四关结构定下来了()
+    {
+        Assert.Equal(4, LevelCatalog.All.Count);
+        Assert.Equal("科目一", LevelCatalog.All[0].Subject);
+        Assert.Equal("科目四", LevelCatalog.All[3].Subject);
+        Assert.NotEmpty(LevelCatalog.Subject1Tutorial.Steps);
     }
 }
