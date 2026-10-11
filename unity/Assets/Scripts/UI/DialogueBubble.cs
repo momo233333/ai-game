@@ -7,14 +7,15 @@ using UnityEngine.UI;
 namespace Copilot.UI
 {
     /// <summary>
-    /// 对话气泡（方案 §1.2 UIManager）：llm_delta 打字机上屏，tts 结束收尾。
+    /// 对话气泡（方案 §1.2 UIManager）：<c>llm_delta</c> 打字机上屏，玩家的话以「你：」回显。
     /// 不依赖 TextMeshPro，直接用 UGUI Text，减少工程依赖。
     /// </summary>
     public sealed class DialogueBubble : MonoBehaviour
     {
-        public AIClient client;
+        public CopilotConnection connection;
         public Text label;
-        [Tooltip("玩家听到/看到的最新台词（含服务端预置话术）")]
+
+        [Tooltip("把识别到的玩家原话短暂上屏")]
         public bool showAsrEcho = true;
 
         [Header("打字机")]
@@ -31,6 +32,8 @@ namespace Copilot.UI
             get { return _rendered; }
         }
 
+        CopilotConnection _bound;
+
         void Reset()
         {
             label = GetComponent<Text>();
@@ -38,36 +41,56 @@ namespace Copilot.UI
 
         void OnEnable()
         {
-            if (client != null) client.TurnEventReceived += HandleTurnEvent;
+            Rebind();
+        }
+
+        /// <summary>幂等绑定（AddComponent 会在字段注入前触发 OnEnable，装配方注入后再调一次）。</summary>
+        public void Rebind()
+        {
+            if (_bound == connection) return;
+            if (_bound != null) _bound.TurnEventReceived -= HandleTurnEvent;
+            _bound = connection;
+            if (_bound != null) _bound.TurnEventReceived += HandleTurnEvent;
         }
 
         void OnDisable()
         {
-            if (client != null) client.TurnEventReceived -= HandleTurnEvent;
+            if (_bound != null)
+            {
+                _bound.TurnEventReceived -= HandleTurnEvent;
+                _bound = null;
+            }
+        }
+
+        void Start()
+        {
+            Rebind();
         }
 
         void HandleTurnEvent(TurnEvent evt)
         {
             if (evt == null) return;
+
             switch (evt.Kind)
             {
-                case "llm_delta":
+                case TurnEventKind.LlmDelta:
                     BeginLine();
                     _buffer.Append(evt.Text);
                     break;
-                case "asr_final":
+
+                case TurnEventKind.AsrFinal:
                     if (showAsrEcho && !string.IsNullOrEmpty(evt.Text))
                     {
-                        // 玩家的话以「你：」前缀短暂上屏
                         SetImmediate("你：" + evt.Text);
                     }
                     break;
-                case "tts_audio":
-                    string text = Copilot.Core.SimpleJson.GetString(evt.Data, "text");
-                    if (_buffer.Length == 0 && !string.IsNullOrEmpty(text))
+
+                case TurnEventKind.TtsAudio:
+                    // 语音库里兜底的台词也要上屏（此时通常没有 llm_delta 文本）
+                    if (_buffer.Length == 0 && !string.IsNullOrEmpty(evt.Text))
                     {
                         BeginLine();
-                        _buffer.Append(text);
+                        _buffer.Append(evt.Text);
                     }
                     _visibleChars = Mathf.Max(_visibleChars, _buffer.Length);
                     break;

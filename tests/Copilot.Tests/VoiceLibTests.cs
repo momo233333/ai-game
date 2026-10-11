@@ -122,4 +122,31 @@ public class WavReaderTests
         var outPcm = AudioUtil.Decimate16(pcm, 3);
         Assert.Equal(16, outPcm.Length);
     }
+
+    [Fact]
+    public void float转PCM16_越界与非数被夹到合法值()
+    {
+        var pcm = AudioUtil.ToPcm16(new[] { 0f, 1f, -1f, 2.5f, -3f, float.NaN });
+
+        Assert.Equal(12, pcm.Length);
+        Assert.Equal(0, System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(0, 2)));
+        Assert.Equal(32767, System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(2, 2)));
+        Assert.Equal(-32767, System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(4, 2)));
+        Assert.Equal(32767, System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(6, 2)));
+        Assert.Equal(-32767, System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(8, 2)));
+        Assert.Equal(0, System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(10, 2)));
+    }
+
+    [Fact]
+    public void PCM16与float互转_往返一致()
+    {
+        var original = new[] { 0f, 0.5f, -0.5f, 1f, -1f };
+
+        var roundTrip = AudioUtil.ToFloat(AudioUtil.ToPcm16(original));
+
+        for (int i = 0; i < original.Length; i++)
+        {
+            Assert.Equal(original[i], roundTrip[i], 3);
+        }
+    }
 }

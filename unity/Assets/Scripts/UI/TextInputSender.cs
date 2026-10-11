@@ -9,7 +9,7 @@ namespace Copilot.UI
     /// </summary>
     public sealed class TextInputSender : MonoBehaviour
     {
-        public AIClient client;
+        public CopilotConnection connection;
         public InputField input;
         public Button sendButton;
         public KeyCode submitKey = KeyCode.Return;
@@ -32,10 +32,10 @@ namespace Copilot.UI
 
         public void Send()
         {
-            if (input == null || client == null) return;
+            if (input == null || connection == null) return;
             string text = input.text;
             if (string.IsNullOrEmpty(text)) return;
-            client.SendText(text);
+            connection.SendText(text);
             input.text = "";
         }
     }

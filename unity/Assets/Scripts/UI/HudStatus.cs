@@ -13,7 +13,7 @@ namespace Copilot.UI
     /// </summary>
     public sealed class HudStatus : MonoBehaviour
     {
-        public AIClient client;
+        public CopilotConnection connection;
         public GameStateManager gameState;
         public MicCapture mic;
         public TtsPlayer ttsPlayer;
@@ -42,10 +42,10 @@ namespace Copilot.UI
         {
             if (_bound) return;
             _bound = true;
-            if (client != null)
+            if (connection != null)
             {
-                client.Connected += OnConnected;
-                client.Disconnected += OnDisconnected;
+                connection.Connected += OnConnected;
+                connection.Disconnected += OnDisconnected;
             }
             if (gameState != null)
             {
@@ -70,10 +70,10 @@ namespace Copilot.UI
         {
             if (!_bound) return;
             _bound = false;
-            if (client != null)
+            if (connection != null)
             {
-                client.Connected -= OnConnected;
-                client.Disconnected -= OnDisconnected;
+                connection.Connected -= OnConnected;
+                connection.Disconnected -= OnDisconnected;
             }
             if (gameState != null)
             {
@@ -106,7 +106,7 @@ namespace Copilot.UI
         {
             if (trustBar != null) trustBar.fillAmount = Mathf.Clamp01(trust / 100f);
             if (trustLabel != null) trustLabel.text = Mathf.RoundToInt(trust) + "/100";
-            if (emotionLabel != null) emotionLabel.text = EmotionUtil.ToName(emotion);
+            if (emotionLabel != null) emotionLabel.text = EmotionNames.ToWire(emotion);
             if (delta < -0.01f && toastLabel != null) ShowToast("信任 " + delta.ToString("0"));
         }
 

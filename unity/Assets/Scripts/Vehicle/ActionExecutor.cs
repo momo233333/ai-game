@@ -7,57 +7,54 @@ namespace Copilot.Vehicle
 {
     /// <summary>
     /// AI 指令 → 物理层的中间层（方案 §5.1）：
-    /// 收 drive_action 先限幅 + 白名单校验，再在 FixedUpdate 按 hold_ms 平滑插值下发给车辆。
-    /// 车辆永远只认识这里输出的归一化量，LLM 抖不到 WheelCollider。
+    /// 收 <c>drive_action</c> 先过共享的 <see cref="ActionLimits"/>（白名单 + 场景规则 + 限幅），
+    /// 再在 FixedUpdate 按 <c>hold_ms</c> 平滑下发。车辆永远只认识归一化量。
+    ///
+    /// 限幅/白名单用的是 <c>src/Copilot.Core/ActionLimits.cs</c> **与服务端同一份代码**，
+    /// 不在 Unity 侧另写一遍 —— 两端规则不可能漂移。
     /// </summary>
     public sealed class ActionExecutor : MonoBehaviour
     {
-        public AIClient client;
+        public CopilotConnection connection;
         public VehicleController vehicle;
 
-        [Tooltip("客户端兜底限幅（与服务端 ActionParser 双保险）")]
-        public float maxSteer = ActionExecutorCore.MaxSteer;
+        [Tooltip("下发插值速率：满量程所需毫秒数")]
+        public float rampMs = 150f;
 
-        readonly ActionExecutorCore _core = new ActionExecutorCore();
-
-        public ActionExecutorCore Core
-        {
-            get { return _core; }
-        }
+        DriveAction _target;
+        float _elapsedMs;
+        bool _active;
+        float _steer;
+        float _throttle;
+        float _brake;
 
         /// <summary>最近一次指令（UI 可用于显示意图动效）。</summary>
-        public DriveAction Current
-        {
-            get { return _core.Current; }
-        }
+        public DriveAction Current { get; private set; }
 
         public event Action<DriveAction> ActionReceived;
 
-        AIClient _boundClient;
+        CopilotConnection _bound;
 
         void OnEnable()
         {
             Rebind();
         }
 
-        /// <summary>
-        /// 绑定客户端。AddComponent 会在字段注入前就触发 OnEnable，
-        /// 所以装配方（CopilotBootstrap）注入后还要再调一次 —— 本方法幂等。
-        /// </summary>
+        /// <summary>幂等绑定（AddComponent 会在字段注入前触发 OnEnable，装配方注入后再调一次）。</summary>
         public void Rebind()
         {
-            if (_boundClient == client) return;
-            if (_boundClient != null) _boundClient.TurnEventReceived -= HandleTurnEvent;
-            _boundClient = client;
-            if (_boundClient != null) _boundClient.TurnEventReceived += HandleTurnEvent;
+            if (_bound == connection) return;
+            if (_bound != null) _bound.TurnEventReceived -= HandleTurnEvent;
+            _bound = connection;
+            if (_bound != null) _bound.TurnEventReceived += HandleTurnEvent;
         }
 
         void OnDisable()
         {
-            if (_boundClient != null)
+            if (_bound != null)
             {
-                _boundClient.TurnEventReceived -= HandleTurnEvent;
-                _boundClient = null;
+                _bound.TurnEventReceived -= HandleTurnEvent;
+                _bound = null;
             }
         }
 
@@ -68,32 +65,47 @@ namespace Copilot.Vehicle
 
         void HandleTurnEvent(TurnEvent evt)
         {
-            if (evt == null || evt.Kind != "drive_action") return;
-            Execute(evt.ToDriveAction());
+            if (evt == null || evt.Kind != TurnEventKind.DriveAction || evt.Action == null) return;
+            Execute(evt.Action);
         }
 
-        /// <summary>直接执行一条动作（本地调试 / 单测路径也可用）。</summary>
+        /// <summary>执行一条动作（本地调试 / 单测路径也可用）。返回实际生效的（已限幅）动作。</summary>
         public DriveAction Execute(DriveAction action)
         {
-            var applied = _core.Execute(action);
+            var applied = ActionLimits.Clamp(action);
+            Current = applied;
+            _target = applied;
+            _elapsedMs = 0f;
+            // IGNORE / QUESTION_BACK 只给一个极短的「无动力」占位，别让车莫名前冲
+            _active = applied.Intent != Intents.Ignore && applied.Intent != Intents.QuestionBack;
             if (ActionReceived != null) ActionReceived(applied);
             return applied;
         }
 
         void FixedUpdate()
         {
-            float steer, throttle, brake;
-            _core.Tick(Time.fixedDeltaTime * 1000f, out steer, out throttle, out brake);
-            if (vehicle != null) vehicle.ApplyInput(steer, throttle, brake);
+            float dtMs = Time.fixedDeltaTime * 1000f;
+
+            if (_active)
+            {
+                _elapsedMs += dtMs;
+                if (_elapsedMs >= _target.HoldMs) _active = false;
+            }
+
+            float step = rampMs <= 0f ? 1f : dtMs / rampMs;
+            _steer = Mathf.MoveTowards(_steer, _active ? _target.Steering : 0f, step);
+            _throttle = Mathf.MoveTowards(_throttle, _active ? _target.Throttle : 0f, step);
+            _brake = Mathf.MoveTowards(_brake, _active ? _target.Brake : 0f, step);
+
+            if (vehicle != null) vehicle.ApplyInput(_steer, _throttle, _brake);
         }
 
         void OnDrawGizmosSelected()
         {
-            if (!Application.isPlaying) return;
-            var action = _core.Current;
+            if (!Application.isPlaying || Current == null) return;
             Gizmos.color = Color.cyan;
             Vector3 origin = transform.position + Vector3.up * 1.5f;
-            Vector3 direction = Quaternion.Euler(0f, action.Steering * 45f, 0f) * transform.forward;
+            Vector3 direction = Quaternion.Euler(0f, Current.Steering * 45f, 0f) * transform.forward;
             Gizmos.DrawRay(origin, direction * 4f);
         }
     }

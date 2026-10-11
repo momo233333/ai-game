@@ -157,5 +157,37 @@ namespace Copilot.Core
             }
             return outBytes;
         }
+
+        /// <summary>
+        /// float 采样（[-1,1]）→ 16-bit 小端 PCM。Unity 的 <c>Microphone</c> 给的是 float[]，
+        /// 上行必须是 PCM16，转换放在共享库里以便单测（越界与非数一律夹到合法值）。
+        /// </summary>
+        public static byte[] ToPcm16(float[] samples)
+        {
+            if (samples == null) throw new ArgumentNullException(nameof(samples));
+            var outBytes = new byte[samples.Length * 2];
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float v = samples[i];
+                if (float.IsNaN(v)) v = 0f;
+                if (v > 1f) v = 1f;
+                else if (v < -1f) v = -1f;
+                BinaryPrimitives.WriteInt16LittleEndian(outBytes.AsSpan(i * 2, 2), (short)Math.Round(v * 32767f));
+            }
+            return outBytes;
+        }
+
+        /// <summary>16-bit 小端 PCM → float 采样（[-1,1]）。下行 TTS 音频交给 Unity <c>AudioClip</c> 用。</summary>
+        public static float[] ToFloat(byte[] pcm16)
+        {
+            if (pcm16 == null) throw new ArgumentNullException(nameof(pcm16));
+            int frames = pcm16.Length / 2;
+            var samples = new float[frames];
+            for (int i = 0; i < frames; i++)
+            {
+                samples[i] = BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(i * 2, 2)) / 32768f;
+            }
+            return samples;
+        }
     }
 }

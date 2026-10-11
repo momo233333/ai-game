@@ -10,8 +10,14 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 ```
 Unity 主进程 (C#)  ──gRPC(localhost:50051)──►  AI 伴生进程 (C#, .NET 8)
 渲染/物理/UI/麦克风                             VAD→ASR→Dialogue(LLM)→ActionParser→TTS
-                                                  ▲ 共享 Copilot.Core（纯逻辑，netstandard2.1）
+        │                                         ▲
+        └── 共用接入层 Copilot.Client ────────────┘  共享 Copilot.Core（纯逻辑，netstandard2.1）
+              （gRPC 客户端 + 事件映射，无 Unity 依赖）     契约 Copilot.Contracts（proto，两端同源）
 ```
+
+**为什么多一个 `Copilot.Client`**：传输与事件映射写在共享库里，Unity 脚本、编辑器工具、集成测试
+用**同一份接入代码**（`tests/Copilot.Tests/ClientTests.cs` 就是拿它打真 gRPC 服务端验证的）；
+限幅/信任/情绪等规则同理全部来自 `Copilot.Core`，Unity 侧不另写一套 —— 两端逻辑不可能漂移。
 
 降级链（任一环节缺失都不影响启动）：
 
@@ -33,18 +39,19 @@ ai-game/
 ├── src/
 │   ├── Copilot.Contracts/      # proto → C# gRPC 契约（netstandard2.1）
 │   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信任情绪/语音库/编排（netstandard2.1，Unity 可引用）
+│   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 119 项（含起真 gRPC 服务端的集成测试 + P6 对话回归集）
+│   ├── Copilot.Tests/          # xUnit 130 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：32 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
 ├── data/sensitive_words.txt    # 共享敏感词表
 ├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（72 条 24kHz）
-├── tools/                      # fetch_models.ps1 / make_command_samples.ps1
+├── tools/                      # fetch_models.ps1 / make_command_samples.ps1 / build_unity_plugins.ps1
 │                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
-├── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
-└── unity/                      # ⚠️ 遗留：V1.0 C# 骨架，待按 V2.0 重做
+├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC
+└── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
 ```
 
 ## 快速开始
@@ -59,7 +66,7 @@ cd e:\AI_Workplace\AI_Game\ai-game
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（119 项）
+# 1) 编译（0 警告 0 错误）+ 测试（130 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -95,6 +102,12 @@ dotnet test Copilot.sln --filter "FullyQualifiedName~DialogueRegressionTests"
 Get-Content logs\dialogue_regression_规则后端.log          # 首次运行后生成
 # 真 LLM 后端版（默认跳过；需 models/ 约 4.6GB，约 1s/条）
 $env:COPILOT_LLM_REGRESSION=1; dotnet test Copilot.sln --filter "FullyQualifiedName~DialogueRegressionTests"
+
+# 8) Unity 接入（P8）—— 先起服务端，再把共享库 DLL 拷进 Unity 工程
+dotnet run --project src\Copilot.AIService -- --server          # 保持这个窗口开着
+powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
+# 然后用 Unity Hub 以 2022.3 LTS 打开 unity\ 目录；场景里挂 CopilotBootstrap 即可
+#   （装配 VehicleController + 一个 AudioSource，按住空格说话）
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。
@@ -161,5 +174,7 @@ powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1   # 读 
 
 ## 遗留代码
 
-`ai-service/`（Python 全套实现，269 单测）与 `unity/`（V1.0 C# 骨架，JSON-TCP）**保留为参考，不再维护**。
-V2.0 的 Unity 侧将重做为「引用 `Copilot.Core` + 接 gRPC」，见 `开发进度.md` §8 下一步。
+- `ai-service/`（V1.0 Python 全套实现，269 单测）**保留为参考，不再维护**。
+- `unity/` 已按 V2.0 **重做**：不再自带 JSON-TCP 传输与 `Copilot.Core` 副本（那会与 `src/Copilot.Core` 撞名），
+  改为引用 `tools/build_unity_plugins.ps1` 产出的共享库 DLL，经 gRPC 接入。
+  限幅走 `Core.ActionLimits`、信任/情绪走 `Core.TrustState`，Unity 侧不重复实现规则。

@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Copilot.Core\Copilot.Core.csproj" />
     <ProjectReference Include="..\..\src\Copilot.Contracts\Copilot.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Copilot.Client\Copilot.Client.csproj" />
     <ProjectReference Include="..\..\src\Copilot.AIService\Copilot.AIService.csproj" />
   </ItemGroup>
 

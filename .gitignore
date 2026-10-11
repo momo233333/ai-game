@@ -10,10 +10,20 @@ ai-service/models/
 # 模型权重（C# 栈统一目录，见 IT方案1.md V2.0 §2.4）
 models/
 
-# .NET 构建产物（Copilot.Core / Contracts / AIService / Tests）
+# .NET 构建产物（Copilot.Core / Contracts / AIService / Client / Tests）
 [Bb]in/
 [Oo]bj/
 *.user
+
+# Unity 工程生成物
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+# Unity 侧引用的共享库 DLL（由 tools/build_unity_plugins.ps1 生成）
+unity/Assets/Plugins/Copilot/
 
 # 运行时数据（会话状态 / 测试临时库）
 ai-service/memory.db

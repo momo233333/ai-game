@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Copilot.Client</RootNamespace>
+    <AssemblyName>Copilot.Client</AssemblyName>
+    <!-- 让 bin/ 里同时产出全部依赖 DLL —— Unity 侧直接整包拷进 Assets/Plugins 即可。
+         见 tools/build_unity_plugins.ps1。 -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 托管实现，无需各平台原生库 —— Unity 侧只需把 DLL 拷进 Assets/Plugins -->
+    <PackageReference Include="Grpc.Net.Client" Version="2.66.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Copilot.Contracts\Copilot.Contracts.csproj" />
+    <ProjectReference Include="..\Copilot.Core\Copilot.Core.csproj" />
+  </ItemGroup>
+
+</Project>
