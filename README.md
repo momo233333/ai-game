@@ -17,7 +17,7 @@ Unity 主进程 (C#)  ──gRPC(localhost:50051)──►  AI 伴生进程 (C#,
 
 | 环节 | 首选 | 降级 | 当前状态 |
 |------|------|------|--------|
-| LLM | LLamaSharp + Vulkan（Qwen2.5-7B GGUF） | 规则引擎 | ✅ **llamasharp**（~100 tok/s） |
+| LLM | LLamaSharp + Vulkan（Qwen2.5-7B GGUF） | 规则引擎 | ✅ **llamasharp**（~100 tok/s，**GBNF 约束解码**） |
 | ASR | sherpa-onnx 流式 paraformer | 不可用 | ✅ **sherpa-onnx**（int8/CPU，**partial 字幕**） |
 | VAD | Silero（sherpa-onnx） | 能量阈值 | ✅ **silero**（7/7 样本恰好 1 次句尾） |
 | TTS | 预生成语音库（~0ms） | sherpa-onnx VITS 实时合成 → 纯字幕 | **voicelib**（72 条真 wav，带防重复轮换）；VITS 未装 |
@@ -35,7 +35,7 @@ ai-game/
 │   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信任情绪/语音库/编排（netstandard2.1，Unity 可引用）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 116 项（含起真 gRPC 服务端的集成测试 + P6 对话回归集）
+│   ├── Copilot.Tests/          # xUnit 119 项（含起真 gRPC 服务端的集成测试 + P6 对话回归集）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：32 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
@@ -59,7 +59,7 @@ cd e:\AI_Workplace\AI_Game\ai-game
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（116 项）
+# 1) 编译（0 警告 0 错误）+ 测试（119 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -154,6 +154,7 @@ powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1   # 读 
 ## 配置要点（`src/Copilot.AIService/appsettings.json`）
 
 - `llm.backend` / `asr.backend` / `tts.backend` / `vad.backend`：`auto | <具体后端> | rule/none/voicelib/energy`
+- `llm.useGrammar`：GBNF 约束解码开关（默认 `true`）。开启后**输出必然是合法 JSON、intent 必然是枚举值、action 必然是首字段**；文法解析失败会自动降级为「不约束」，不阻塞推理。
 - `tts.voicelibManifest`：语音库 manifest 位置（默认 `voice-corpus/manifest.json`）
 - `tts.sampleRate`：下行 PCM 采样率（默认 24000，与 `voice-corpus/wavs/` 一致）
 - `server.url`：gRPC 监听地址（默认 `http://127.0.0.1:50051`）

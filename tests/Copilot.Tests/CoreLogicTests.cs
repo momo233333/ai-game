@@ -1,3 +1,4 @@
+using System.Linq;
 using Copilot.Core;
 using Copilot.Core.Llm;
 using Xunit;
@@ -331,5 +332,44 @@ public class LlmJsonTests
     {
         var s = LlmOutputSanitizer.Sanitize(new LlmOutput { TtsHint = "L001" }, TestPaths.LoadVoiceLib());
         Assert.Equal("voicelib://L001", s.TtsHint);
+    }
+}
+
+// ---- GBNF 约束解码文法（OutputGrammar）----
+
+public class OutputGrammarTests
+{
+    /// <summary>
+    /// GBNF 里表示「JSON 字符串取值」的写法。
+    /// GBNF 文本 <c>"\"TURN_LEFT\""</c> 匹配的是**带引号**的 <c>"TURN_LEFT"</c>；
+    /// 外层的双引号只是 GBNF 字面量定界符，不算匹配内容。
+    /// </summary>
+    private static string Quoted(string value) => "\"\\\"" + value + "\\\"\"";
+
+    [Fact]
+    public void intent分支必须带引号_否则会生成裸标识符这种非法JSON()
+    {
+        // 回归：早先直接用 Lit 拼，GBNF 的 "TURN_LEFT" 只匹配裸值 TURN_LEFT，
+        // 实测模型输出 {"action":{"intent": TURN_LEFT},...}（缺引号），不是合法 JSON。
+        foreach (var intent in Intents.All)
+        {
+            Assert.Contains(Quoted(intent), OutputGrammar.Gbnf);
+        }
+
+        var expectedRule = "intent   ::= " + string.Join(" | ", Intents.All.Select(Quoted));
+        Assert.Contains(expectedRule, OutputGrammar.Gbnf);
+    }
+
+    [Fact]
+    public void 每个intent都在文法里_不会与代码漂移()
+    {
+        Assert.True(OutputGrammar.ContainsAllIntents());
+    }
+
+    [Fact]
+    public void null是裸值_不带引号()
+    {
+        // JSON 的 null 本来就不带引号，别顺手也去加引号
+        Assert.Contains("hint     ::= \"null\"", OutputGrammar.Gbnf);
     }
 }

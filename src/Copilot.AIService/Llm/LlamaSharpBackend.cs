@@ -29,6 +29,9 @@ public sealed class LlamaSharpBackend : ILlmBackend, IStreamingLlmBackend, ILlmD
     private readonly float _temperature;
     private readonly bool _debugRawOutput;
 
+    /// <summary>GBNF 约束解码用的文法；未启用或原生解析失败时为 null（不阻塞推理）。</summary>
+    private readonly Grammar? _grammar;
+
     /// <summary>gRPC 服务端可能并发调用，单会话必须串行。</summary>
     private readonly SemaphoreSlim _turnLock = new(1, 1);
 
@@ -44,7 +47,7 @@ public sealed class LlamaSharpBackend : ILlmBackend, IStreamingLlmBackend, ILlmD
     public string? LastTurnSummary { get; private set; }
 
     private LlamaSharpBackend(LLamaWeights weights, LLamaContext context, InteractiveExecutor executor,
-        int maxTokens, float temperature, bool debugRawOutput)
+        int maxTokens, float temperature, bool debugRawOutput, Grammar? grammar, string grammarStatus)
     {
         _weights = weights;
         _context = context;
@@ -52,7 +55,12 @@ public sealed class LlamaSharpBackend : ILlmBackend, IStreamingLlmBackend, ILlmD
         _maxTokens = maxTokens;
         _temperature = temperature;
         _debugRawOutput = debugRawOutput;
+        _grammar = grammar;
+        GrammarStatus = grammarStatus;
     }
+
+    /// <summary>约束解码状态（供 --health / 日志展示）。</summary>
+    public string GrammarStatus { get; }
 
     public static LlamaSharpBackend? TryCreate(Config.LlmOptions options, string modelPath, out string reason)
     {
@@ -82,9 +90,27 @@ public sealed class LlamaSharpBackend : ILlmBackend, IStreamingLlmBackend, ILlmD
             context = weights.CreateContext(modelParams, NullLogger.Instance);
             var executor = new InteractiveExecutor(context);
 
+            // GBNF 约束解码。文法解析失败不应该拖垮整个后端 → 降级为「不约束」，只记录状态。
+            Grammar? grammar = null;
+            string grammarStatus = "off";
+            if (options.UseGrammar)
+            {
+                try
+                {
+                    // LLamaSharp 0.23 的 Grammar 构造函数要求显式给根规则名（无默认值），
+                    // 且该版本 Grammar 不实现 IDisposable（无原生句柄需手工释放）。
+                    grammar = new Grammar(OutputGrammar.Gbnf, "root");
+                    grammarStatus = $"gbnf（intent 锁定 {Intents.All.Count} 个枚举值）";
+                }
+                catch (Exception gex)
+                {
+                    grammarStatus = $"gbnf 解析失败，已降级不约束：{gex.Message}";
+                }
+            }
+
             reason = string.Empty;
             return new LlamaSharpBackend(weights, context, executor, options.MaxTokens, options.Temperature,
-                options.DebugRawOutput);
+                options.DebugRawOutput, grammar, grammarStatus);
         }
         catch (Exception ex)
         {
@@ -201,6 +227,7 @@ public sealed class LlamaSharpBackend : ILlmBackend, IStreamingLlmBackend, ILlmD
             Temperature = _temperature,
             TopK = 40,
             TopP = 0.95f,
+            Grammar = _grammar,
         },
     };
 
@@ -224,7 +251,8 @@ public sealed class LlamaSharpBackend : ILlmBackend, IStreamingLlmBackend, ILlmD
 
     public void Dispose()
     {
-        // InteractiveExecutor 不持有原生资源，上下文与权重才是要释放的
+        // InteractiveExecutor 不持有原生资源，上下文与权重才是要释放的。
+        // 文法（LLamaSharp 0.23 的 Grammar）不是 IDisposable，随上下文一并释放。
         _context.Dispose();
         _weights.Dispose();
         _turnLock.Dispose();
@@ -251,7 +279,7 @@ public static class LlmBackendFactory
 
         if (llm != null)
         {
-            detail = $"llamasharp（{Path.GetFileName(modelPath)}，ctx={config.Llm.ContextSize}，ngl={config.Llm.GpuLayers}，有状态会话）";
+            detail = $"llamasharp（{Path.GetFileName(modelPath)}，ctx={config.Llm.ContextSize}，ngl={config.Llm.GpuLayers}，有状态会话，{llm.GrammarStatus}）";
             return llm;
         }
 

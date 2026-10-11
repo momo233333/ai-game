@@ -41,6 +41,12 @@ public sealed class Config
         /// <summary>结构化分类任务，温度要低；实测 0.7 会让 7B 随机把正常指令判成 IGNORE。</summary>
         public float Temperature { get; set; } = 0.3f;
 
+        /// <summary>
+        /// 是否用 GBNF 文法约束解码（见 <see cref="Copilot.Core.Llm.OutputGrammar"/>）。
+        /// 开启后输出必然是合法 JSON、intent 必然是枚举值、action 必然是第一个字段。
+        /// </summary>
+        public bool UseGrammar { get; set; } = true;
+
         /// <summary>把 llama.cpp 的原生日志（加载模型时上百行）打到 stderr，默认关闭。</summary>
         public bool VerboseLogs { get; set; }
 
