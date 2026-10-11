@@ -51,7 +51,8 @@ ai-game/
 ├── tools/                      # fetch_models.ps1 / make_command_samples.ps1 / build_unity_plugins.ps1
 │                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
 ├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC-Web
-│                               #   Assets/Scripts（运行时）+ Assets/Editor（连通性自检）
+│                               #   Assets/Scripts（运行时）+ Assets/Editor（自检 + 场景生成器）
+│                               #   Assets/Scenes/Greybox.unity（生成的可玩灰盒场景）
 │                               #   Assets/Plugins/Copilot（DLL，gitignore，由脚本生成）
 └── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
 ```
@@ -109,12 +110,16 @@ $env:COPILOT_LLM_REGRESSION=1; dotnet test Copilot.sln --filter "FullyQualifiedN
 dotnet run --project src\Copilot.AIService -- --server          # 保持这个窗口开着
 powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
 # 用 Unity **2022.3 LTS** 打开 unity\ 目录（工程已在本机 2022.3.62f3c1 上验证过编译与连通）
-# 场景里挂 CopilotBootstrap（配 VehicleController + 一个 AudioSource），按住空格说话
+# 菜单「副驾指令 / 生成灰盒场景」一键生成 Assets/Scenes/Greybox.unity（车+相机+HUD+装配全连好）
+# 打开 Greybox 按 Play → 按住空格说话
 
-# 9) Unity 连通性自检（编辑器菜单也能点：副驾指令 / 连通性自检）
-#    在 Unity 的运行时里真连一次服务端，验证传输/事件映射/音频回传
+# 9) Unity 侧的两条自检（编辑器菜单也能点，见「副驾指令」菜单）
+#    ① 连通性自检：文本回合 + 语音回合（真 ASR）两条腿
 & "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
   -executeMethod Copilot.EditorTools.SmokeTest.Run -logFile logs\unity_smoke.log
+#    ② 场景结构自检：逐项断言生成场景里该连的引用都连上了
+& "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
+  -executeMethod Copilot.EditorTools.SceneBuilder.ValidateAndExit -logFile logs\unity_validate.log
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。
