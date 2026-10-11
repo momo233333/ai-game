@@ -114,7 +114,11 @@ namespace Copilot.Core
     /// <summary>音频重采样/格式转换（16-bit 单声道 PCM）。</summary>
     public static class AudioUtil
     {
-        /// <summary>线性插值重采样（16-bit mono in → 16-bit mono out）。</summary>
+        /// <summary>
+        /// 重采样（16-bit 单声道 in → out）。**降采样时先做窗口平均（简易低通）**，
+        /// 否则 48k→16k / 44.1k→24k 这种线性插值会把高于目标奈奎斯特频率的齿音、气息
+        /// **折叠回语音频带**（混叠），实测明显拖累 ASR 与听感；升采样走线性插值（不会混叠）。
+        /// </summary>
         public static byte[] Resample16(byte[] pcm16, int fromRate, int toRate)
         {
             if (pcm16 == null) throw new ArgumentNullException(nameof(pcm16));
@@ -125,6 +129,28 @@ namespace Copilot.Core
             double ratio = (double)toRate / fromRate;
             int outFrames = (int)Math.Round(inFrames * ratio);
             var outBytes = new byte[outFrames * 2];
+
+            if (ratio <= 1.0)
+            {
+                for (int i = 0; i < outFrames; i++)
+                {
+                    int start = (int)Math.Floor(i / ratio);
+                    int end = (int)Math.Ceiling((i + 1) / ratio) - 1;
+                    if (end < start) end = start;
+                    if (start > inFrames - 1) start = inFrames - 1;
+                    if (end > inFrames - 1) end = inFrames - 1;
+
+                    int sum = 0, n = 0;
+                    for (int k = start; k <= end; k++)
+                    {
+                        sum += BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(k * 2, 2));
+                        n++;
+                    }
+                    short avg = (short)(sum / Math.Max(n, 1));
+                    BinaryPrimitives.WriteInt16LittleEndian(outBytes.AsSpan(i * 2, 2), avg);
+                }
+                return outBytes;
+            }
 
             for (int i = 0; i < outFrames; i++)
             {

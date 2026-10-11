@@ -20,9 +20,17 @@ namespace Copilot.Audio
         public TtsPlayer ttsPlayer;
 
         [Header("采集")]
-        public int sourceRate = 48000;
+        [Tooltip("请求的采样率。**实际采样率以 AudioClip.frequency 为准** —— 设备不支持时 Unity 会就近取一个，"
+            + "代码若按请求值当真去重采样，音高会整体偏移、ASR 直接崩。默认直接请求 16kHz（等于 ASR 输入率，无需重采样）。")]
+        public int requestedRate = 16000;
+
         public int targetRate = 16000;
         [Range(2, 60)] public int maxSeconds = 20;
+
+        [Header("设备")]
+        [Tooltip("留空 = 系统默认设备。名字不用写全，包含匹配即可（见 Console 里打印的设备列表）。"
+            + "⚠️ 若系统默认指向虚拟麦克风（如 Pico Streaming），识别会一塌糊涂，必须在这里指定真麦克风。")]
+        public string deviceName = "";
 
         [Header("按键")]
         public bool pushToTalk = true;
@@ -30,11 +38,23 @@ namespace Copilot.Audio
         [Tooltip("非 PTT 模式：按一次开、再按一次关")]
         public bool toggleMode = false;
 
+        [Header("抢话与尾巴")]
+        [Tooltip("按下说话键时**打断妹妹的语音**（而不是静默丢弃你的话）。"
+            + "开着才符合直觉：教练一开口，学员就该闭嘴。关掉则退回半双工（她说话时不录）。")]
+        public bool bargeIn = true;
+        [Tooltip("松开键后继续录一小段（毫秒）。人往往话说完了手先松，"
+            + "最后几个字还在设备缓冲里 —— 实测「起步慢慢来」会丢成「起步慢慢」。")]
+        [Range(0, 800)] public int releaseTailMs = 250;
+
         AudioClip _clip;
         int _readPos;
+        /// <summary>本轮**实际**采集率（Begin 时从 <see cref="AudioClip.frequency"/> 读，不是请求值）。</summary>
+        int _actualRate = 16000;
         readonly System.Collections.Generic.List<float> _captured = new System.Collections.Generic.List<float>(48000 * 10);
         bool _recording;
         bool _toggled;
+        /// <summary>松开键的时刻（负值 = 未在收尾余量里）。</summary>
+        float _releaseAt = -1f;
 
         public bool IsRecording
         {
@@ -61,12 +81,39 @@ namespace Copilot.Audio
                 wantRecording = _recording;
             }
 
-            // 半双工：妹妹说话期间不上行，否则会把 TTS 回放录进去
-            if (wantRecording && ttsPlayer != null && ttsPlayer.IsSpeaking) wantRecording = false;
+            // 妹妹说话期间：默认**抢话**（打断她并立刻录），否则退回半双工不上行。
+            // 旧行为是直接 wantRecording=false —— 而她现在一句话要说 3~4 秒，
+            // 玩家在这期间按空格说的话会被**整段丢掉**，实测就是「识别不到 / 只剩一两个字」的主因。
+            if (wantRecording && ttsPlayer != null && ttsPlayer.IsSpeaking)
+            {
+                if (bargeIn)
+                {
+                    ttsPlayer.StopAll();
+                    Debug.Log("[MicCapture] 抢话：打断妹妹的语音，开始录音");
+                }
+                else
+                {
+                    wantRecording = false;
+                }
+            }
 
-            if (wantRecording && !_recording) Begin();
-            else if (!wantRecording && _recording) End();
-            else if (_recording) Pump();
+            if (wantRecording)
+            {
+                _releaseAt = -1f;
+                if (!_recording) Begin();
+                else Pump();
+                return;
+            }
+
+            if (!_recording) return;
+
+            // 松开后的「尾巴余量」：补录一小段再收尾，避免最后几个字被切掉
+            if (_releaseAt < 0f) _releaseAt = Time.unscaledTime;
+            Pump();
+            if (releaseTailMs > 0 && (Time.unscaledTime - _releaseAt) * 1000f < releaseTailMs) return;
+
+            _releaseAt = -1f;
+            End();
         }
 
         public void Begin()
@@ -80,19 +127,56 @@ namespace Copilot.Audio
 
             _readPos = 0;
             _captured.Clear();
-            _clip = Microphone.Start(null, true, maxSeconds, sourceRate);
+            _releaseAt = -1f;
+
+            string device = ResolveDevice();
+            _device = device;
+            _clip = Microphone.Start(device, true, maxSeconds, requestedRate);
+            if (_clip == null)
+            {
+                Debug.LogError("[MicCapture] Microphone.Start 返回 null，本轮无法录音");
+                return;
+            }
+
+            // 关键：实际采样率只认 clip.frequency。设备/驱动不支持 requestedRate 时 Unity 会就近取，
+            // 拿请求值去重采样会让整段音频音高偏移（例如 44100 当 48000 处理 → 慢 8.8%），ASR 基本必错。
+            _actualRate = _clip.frequency > 0 ? _clip.frequency : requestedRate;
+
             _recording = true;
+            Debug.Log(string.Format("[MicCapture] 开始录音：设备「{0}」实际 {1}Hz（请求 {2}Hz）· 可用设备 {3}",
+                device ?? "系统默认", _actualRate, requestedRate, string.Join(" | ", Microphone.devices)));
             if (RecordingStarted != null) RecordingStarted();
         }
+
+        /// <summary>按名字（包含匹配，不区分大小写）挑设备；没配或没匹配上就用系统默认。</summary>
+        string ResolveDevice()
+        {
+            if (string.IsNullOrEmpty(deviceName)) return null;
+
+            for (int i = 0; i < Microphone.devices.Length; i++)
+            {
+                string name = Microphone.devices[i];
+                if (name != null && name.IndexOf(deviceName, StringComparison.OrdinalIgnoreCase) >= 0) return name;
+            }
+
+            Debug.LogWarning(string.Format("[MicCapture] 没找到含「{0}」的麦克风，改用系统默认。可用设备：{1}",
+                deviceName, string.Join(" | ", Microphone.devices)));
+            return null;
+        }
+
+        /// <summary>本轮实际用的设备名（null = 系统默认）。End 必须用同一个名字，否则停不掉。</summary>
+        string _device;
 
         public void End()
         {
             if (!_recording) return;
             _recording = false;
+            _releaseAt = -1f;
             Pump();
 
-            if (Microphone.IsRecording(null)) Microphone.End(null);
+            if (Microphone.IsRecording(_device)) Microphone.End(_device);
             _clip = null;
+            _device = null;
 
             int samples = _captured.Count;
             if (RecordingStopped != null) RecordingStopped(samples);
@@ -125,7 +209,28 @@ namespace Copilot.Audio
             }
 
             byte[] atSourceRate = AudioUtil.ToPcm16(_captured.ToArray());
-            byte[] atTargetRate = AudioUtil.Resample16(atSourceRate, sourceRate, targetRate);
+            int frames = atSourceRate.Length / 2;
+            double seconds = _actualRate > 0 ? frames / (double)_actualRate : 0;
+
+            // 电平取证：识别不准时先看这两个数 —— 峰值太小说明是「录得太小声」，不是模型的问题
+            int peak = 0;
+            long sumSq = 0;
+            for (int i = 0; i < frames; i++)
+            {
+                short s = BitConverter.ToInt16(atSourceRate, i * 2);
+                int a = s < 0 ? -s : s;
+                if (a > peak) peak = a;
+                sumSq += (long)s * s;
+            }
+            int rms = frames > 0 ? (int)Math.Sqrt(sumSq / (double)frames) : 0;
+
+            Debug.Log(string.Format("[MicCapture] 录音 {0} 帧（{1:0.00}s @{2}Hz）峰值 {3} · RMS {4}{5}",
+                frames, seconds, _actualRate, peak, rms,
+                peak < 1500 ? "  ⚠️ 电平偏低（正常说话峰值应在 3000+），检查麦克风音量/距离" : ""));
+
+            byte[] atTargetRate = _actualRate == targetRate
+                ? atSourceRate
+                : AudioUtil.Resample16(atSourceRate, _actualRate, targetRate);
 
             if (!connection.SendVoice(atTargetRate))
             {

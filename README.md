@@ -131,6 +131,9 @@ powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
 # 用 Unity **2022.3 LTS** 打开 unity\ 目录（工程已在本机 2022.3.62f3c1 上验证过编译与连通）
 # 菜单「副驾指令 / 生成灰盒场景」一键生成 Assets/Scenes/Greybox.unity
 # 打开 Greybox 按 Play → 按住空格说话（教小雅开车）；Q/E 或按住鼠标右键扭头看她
+#   · 你一按空格就会**打断妹妹的话**（抢话）——教练开口，学员闭嘴，不用等她说完
+#   · 识别不准先看 Console 里的 [MicCapture] 行：实际采样率 / 帧数 / 峰值 / RMS
+#     （峰值 <1500 说明录得太小声，不是模型的问题）；也看 Unity 编辑器日志里的 [Copilot] 听到：
 
 # 9) Unity 侧自检（编辑器菜单也能点，见「副驾指令」菜单）
 #    推荐用这个脚本跑：它会先杀残留 Unity、轮询到进程退出再跑下一个
