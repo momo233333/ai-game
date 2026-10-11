@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 using Copilot.AI;
 using Copilot.Audio;
@@ -8,37 +9,57 @@ using Copilot.Vehicle;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace Copilot.EditorTools
 {
     /// <summary>
-    /// 生成「开箱可玩」的灰盒场景（P8/P9 之间的那一步）。
+    /// 生成「开箱可玩」的场景（P8 灰盒 → P9 街道）。
     ///
-    /// 为什么要生成而不是手搭：手搭一次要挂十来个组件、连二十来处引用，还容易漏；
-    /// 生成器是可重跑的**代码**，改一处结构重新生成即可，也便于以后接真实车模时替换几何体。
+    /// 为什么用代码生成而不是手搭：手搭一次要挂十来个组件、连二十来处引用，还容易漏；
+    /// 生成器是可重跑的**代码**，改一处结构重新生成即可。美术资产到位后也只改
+    /// <c>CreateVehicle</c>/<c>CreateCity</c>，装配与 UI 逻辑不用动。
     ///
     /// 产物：`Assets/Scenes/Greybox.unity`
-    /// - `Road`：长条路面（Cube 缩放，供 WheelCollider 抓地）
+    /// - `City`：路面 + 车道线 + 人行道 + 路口 + 楼群 + 路灯 + 锥桶 + 路边停车
     /// - `Car`：Rigidbody + 4×WheelCollider + `VehicleController`（`VehiclePhysicsProfile` 资产）
     /// - `Main Camera`：`ChaseCamera` 跟随
     /// - `CopilotRig`：`CopilotConnection` + 执行/状态/音频/UI 全套 + `CopilotBootstrap`
     /// - `HUD`：信任条 / 情绪 / 字幕 / 飘条 / 录音指示（UGUI，无需 TextMeshPro）
     ///
-    /// 用法：
-    /// ① 编辑器菜单：`副驾指令 / 生成灰盒场景`
-    /// ② 批处理：`-executeMethod Copilot.EditorTools.SceneBuilder.BuildAndExit`
-    /// ③ 结构自检：`-executeMethod Copilot.EditorTools.SceneBuilder.ValidateAndExit`
+    /// 用法（编辑器菜单或 batchmode）：
+    /// - `副驾指令 / 生成灰盒场景`      → `SceneBuilder.BuildAndExit`
+    /// - `副驾指令 / 校验灰盒场景`      → `SceneBuilder.ValidateAndExit`（断言引用都连上了）
+    /// - `副驾指令 / 渲染场景预览图`    → `SceneBuilder.CaptureAndExit`（渲一张 PNG，供人/CI 看画面）
     /// </summary>
     public static class SceneBuilder
     {
         const string SceneDir = "Assets/Scenes";
         const string ScenePath = SceneDir + "/Greybox.unity";
         const string ProfilePath = "Assets/VehiclePhysicsProfile.asset";
+        const string PreviewRelativePath = "logs/unity_scene_preview.png";
 
         const string RigName = "CopilotRig";
         const string CarName = "Car";
+
+        /// <summary>固定随机种子：每次生成的楼群/道具布局完全一致，便于对比与回归。</summary>
+        const int Seed = 20261011;
+
+        // 路面参数（车辆与道具都按这些摆放，改这里就整体改）
+        const float RoadHalfWidth = 8f;
+        const float RoadLength = 360f;
+        const float RoadCenterZ = 120f;
+        const float LaneMarkZ = 0.5f;
+        const float CrossZ = 120f;
+        const float CrossHalfWidth = 8f;
+
+        // 共用材质（一次构建内复用，避免几百个材质实例）
+        static Material _road, _laneSolid, _laneDash, _sidewalk, _curb;
+        static Material _bldA, _bldB, _bldC, _window, _roof;
+        static Material _pole, _lamp;
+        static Material _body, _glass, _tire, _rim, _lightFront, _lightRear, _cone;
 
         [MenuItem("副驾指令/生成灰盒场景")]
         public static void BuildFromMenu()
@@ -55,8 +76,16 @@ namespace Copilot.EditorTools
             Validate();
         }
 
+        [MenuItem("副驾指令/渲染场景预览图")]
+        public static void CaptureFromMenu()
+        {
+            var png = Capture();
+            Debug.Log("[SceneBuilder] 预览图：" + png);
+        }
+
         public static void BuildAndExit() => RunAndExit(Build);
         public static void ValidateAndExit() => RunAndExit(Validate);
+        public static void CaptureAndExit() => RunAndExit(() => Capture());
 
         static void RunAndExit(Action action)
         {
@@ -80,11 +109,13 @@ namespace Copilot.EditorTools
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
+            CreatePalette();
+            SetupEnvironment();
             CreateLight();
 
             var profile = EnsureProfile();
-            var road = CreateRoad();
-            var car = CreateCar(profile);
+            var city = CreateCity();
+            var car = CreateVehicle(profile, city.transform);
             CreateCamera(car.transform);
             var rig = CreateRig(car);
             CreateHud(rig);
@@ -102,6 +133,54 @@ namespace Copilot.EditorTools
             Debug.Log("[SceneBuilder] 场景已生成：" + ScenePath);
         }
 
+        static void CreatePalette()
+        {
+            _road = MakeMaterial(new Color(0.20f, 0.21f, 0.23f));
+            _laneSolid = MakeMaterial(new Color(0.88f, 0.88f, 0.85f));
+            _laneDash = MakeMaterial(new Color(0.92f, 0.92f, 0.88f));
+            _sidewalk = MakeMaterial(new Color(0.55f, 0.55f, 0.54f));
+            _curb = MakeMaterial(new Color(0.72f, 0.72f, 0.70f));
+
+            _bldA = MakeMaterial(new Color(0.62f, 0.60f, 0.58f));
+            _bldB = MakeMaterial(new Color(0.48f, 0.50f, 0.54f));
+            _bldC = MakeMaterial(new Color(0.70f, 0.64f, 0.56f));
+            _window = MakeMaterial(new Color(0.10f, 0.12f, 0.16f));
+            _roof = MakeMaterial(new Color(0.30f, 0.31f, 0.33f));
+
+            _pole = MakeMaterial(new Color(0.35f, 0.36f, 0.38f));
+            _lamp = MakeMaterial(new Color(1f, 0.95f, 0.75f), new Color(1f, 0.9f, 0.6f) * 2f);
+
+            _body = MakeMaterial(new Color(0.72f, 0.18f, 0.16f));
+            _glass = MakeMaterial(new Color(0.12f, 0.16f, 0.20f));
+            _tire = MakeMaterial(new Color(0.09f, 0.09f, 0.10f));
+            _rim = MakeMaterial(new Color(0.75f, 0.76f, 0.78f));
+            _lightFront = MakeMaterial(new Color(1f, 0.98f, 0.85f), new Color(1f, 0.97f, 0.8f) * 1.5f);
+            _lightRear = MakeMaterial(new Color(0.9f, 0.15f, 0.12f), new Color(1f, 0.15f, 0.1f) * 1.5f);
+            _cone = MakeMaterial(new Color(0.95f, 0.45f, 0.10f));
+        }
+
+        static void SetupEnvironment()
+        {
+            // 雾：城市远景不至于「一刀切」地消失在裁剪面
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogDensity = 0.0035f;
+            RenderSettings.fogColor = new Color(0.62f, 0.72f, 0.82f);
+
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.42f, 0.44f, 0.48f);
+        }
+
+        static void CreateLight()
+        {
+            var go = new GameObject("Directional Light");
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.15f;
+            light.shadows = LightShadows.Soft;
+            go.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
+        }
+
         static VehiclePhysicsProfile EnsureProfile()
         {
             var existing = AssetDatabase.LoadAssetAtPath<VehiclePhysicsProfile>(ProfilePath);
@@ -112,60 +191,160 @@ namespace Copilot.EditorTools
             return profile;
         }
 
-        static void CreateLight()
+        // ---- 场景几何 -------------------------------------------------
+
+        static GameObject CreateCity()
         {
-            var go = new GameObject("Directional Light");
-            var light = go.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1.1f;
-            go.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
+            var city = new GameObject("City");
+            var rng = new System.Random(Seed);
+
+            CreateRoad(city.transform);
+            CreateBuildings(city.transform, rng);
+            CreateStreetLights(city.transform);
+            CreateProps(city.transform, rng);
+            return city;
         }
 
-        static GameObject CreateRoad()
+        static void CreateRoad(Transform parent)
         {
-            var road = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            road.name = "Road";
-            road.transform.position = new Vector3(0f, -0.5f, 60f);
-            road.transform.localScale = new Vector3(16f, 1f, 400f);
-            road.GetComponent<Renderer>().sharedMaterial = MakeMaterial(new Color(0.22f, 0.23f, 0.25f));
+            Box("Road", parent, new Vector3(0f, -0.5f, RoadCenterZ), new Vector3(RoadHalfWidth * 2f, 1f, RoadLength), _road);
+            // 横向路口（让「左转/右转」在场景里真的有意义）
+            Box("CrossRoad", parent, new Vector3(0f, -0.5f, CrossZ), new Vector3(160f, 1f, CrossHalfWidth * 2f), _road);
 
-            // 路肩：给点视觉参照，方便判断车在动
-            for (int i = -1; i <= 1; i += 2)
+            // 人行道 + 路缘
+            for (int side = -1; side <= 1; side += 2)
             {
-                var edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                edge.name = "Edge" + (i < 0 ? "L" : "R");
-                edge.transform.SetParent(road.transform, false);
-                edge.transform.localPosition = new Vector3(0.47f * i, 0.55f, 0f);
-                edge.transform.localScale = new Vector3(0.06f, 0.1f, 1f);
-                edge.GetComponent<Renderer>().sharedMaterial = MakeMaterial(new Color(0.8f, 0.8f, 0.78f));
+                float x = side * (RoadHalfWidth + 1.8f);
+                Box("Sidewalk", parent, new Vector3(x, 0.15f, RoadCenterZ), new Vector3(3.6f, 0.3f, RoadLength), _sidewalk);
+                Box("Curb", parent, new Vector3(side * (RoadHalfWidth + 0.12f), 0.16f, RoadCenterZ), new Vector3(0.24f, 0.34f, RoadLength), _curb);
             }
-            return road;
+
+            // 车道线：中心实线 + 两侧实线 + 车道分隔虚线（路口区间断）
+            // 注意 y 必须**高于**路面顶面（路面顶面在 y=0），否则整条线埋进沥青里看不见 —— 踩过
+            const float markY = 0.012f;
+            const float markThickness = 0.02f;
+
+            Box("CenterLine", parent, new Vector3(0f, markY, RoadCenterZ), new Vector3(0.16f, markThickness, RoadLength), _laneSolid);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Box("LaneEdge", parent, new Vector3(side * 7.2f, markY, RoadCenterZ), new Vector3(0.18f, markThickness, RoadLength), _laneSolid);
+            }
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (float z = -RoadLength / 2f; z < RoadLength / 2f; z += 8f)
+                {
+                    float world = RoadCenterZ + z;
+                    if (Mathf.Abs(world - CrossZ) < CrossHalfWidth + 3f) continue; // 路口不画线
+                    Box("LaneDash", parent, new Vector3(side * 3.6f, markY, world), new Vector3(0.16f, markThickness, 3.4f), _laneDash);
+                }
+            }
+
+            // 斑马线（路口四个方向）
+            for (int dir = -1; dir <= 1; dir += 2)
+            {
+                for (int i = -3; i <= 3; i++)
+                {
+                    Box("Zebra", parent,
+                        new Vector3(i * 1.35f, markY, CrossZ + dir * (CrossHalfWidth + 1.6f)),
+                        new Vector3(0.8f, markThickness, 1.8f), _laneSolid);
+                }
+            }
         }
 
-        static Material MakeMaterial(Color color)
+        static void CreateBuildings(Transform parent, System.Random rng)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var mat = new Material(shader);
-            mat.color = color;
-            return mat;
+            var facades = new[] { _bldA, _bldB, _bldC };
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (float z = -40f; z <= RoadLength - 40f; z += 26f)
+                {
+                    if (Mathf.Abs(RoadCenterZ + z - CrossZ) < CrossHalfWidth + 6f) continue; // 路口留空
+
+                    float width = 14f + (float)rng.NextDouble() * 8f;      // 沿 Z 的进深
+                    float depth = 12f + (float)rng.NextDouble() * 8f;      // 沿 X 的宽度
+                    float height = 12f + (float)rng.NextDouble() * 26f;
+                    float x = side * (RoadHalfWidth + 4f + depth / 2f);
+
+                    var facade = facades[rng.Next(facades.Length)];
+                    var b = Box("Building", parent,
+                        new Vector3(x, height / 2f, RoadCenterZ + z),
+                        new Vector3(depth, height, width), facade);
+
+                    // 屋顶设备箱：高楼才有，制造天际线高低差
+                    if (height > 22f)
+                    {
+                        Box("RoofBox", b.transform, new Vector3(0f, 0.5f + 1.2f / height, 0f),
+                            new Vector3(0.4f, 2.4f / height, 0.4f), _roof);
+                    }
+
+                    // 面向马路的窗带
+                    float faceX = -side * (0.5f + 0.01f);
+                    for (int band = 1; band <= 3; band++)
+                    {
+                        float t = band / 4f + 0.06f;
+                        Box("WindowBand", b.transform,
+                            new Vector3(faceX, t - 0.5f, 0f),
+                            new Vector3(0.02f, 3.2f / height, 0.78f), _window);
+                    }
+                }
+            }
         }
 
-        static GameObject CreateCar(VehiclePhysicsProfile profile)
+        static void CreateStreetLights(Transform parent)
+        {
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (float z = -20f; z <= RoadLength - 40f; z += 34f)
+                {
+                    float worldZ = RoadCenterZ + z;
+                    if (Mathf.Abs(worldZ - CrossZ) < CrossHalfWidth + 4f) continue;
+
+                    var pole = new GameObject("StreetLight");
+                    pole.transform.SetParent(parent, false);
+                    pole.transform.localPosition = new Vector3(side * (RoadHalfWidth + 1.2f), 0f, worldZ);
+
+                    Cylinder("Pole", pole.transform, new Vector3(0f, 3.5f, 0f), new Vector3(0.22f, 3.5f, 0.22f), _pole);
+                    Box("Arm", pole.transform, new Vector3(-side * 1.1f, 6.9f, 0f), new Vector3(2.2f, 0.16f, 0.16f), _pole);
+                    Box("Lamp", pole.transform, new Vector3(-side * 2.1f, 6.82f, 0f), new Vector3(0.7f, 0.14f, 0.36f), _lamp);
+                }
+            }
+        }
+
+        static void CreateProps(Transform parent, System.Random rng)
+        {
+            // 路口锥桶
+            for (int i = 0; i < 4; i++)
+            {
+                float z = CrossZ + CrossHalfWidth + 3f + i * 2.2f;
+                Cylinder("Cone", parent, new Vector3(-5.4f, 0.35f, z), new Vector3(0.5f, 0.35f, 0.5f), _cone);
+            }
+
+            // 路边停车（用简化车身，不做车轮碰撞）
+            for (int i = 0; i < 3; i++)
+            {
+                float z = RoadCenterZ - 70f + i * 34f;
+                var parked = new GameObject("ParkedCar");
+                parked.transform.SetParent(parent, false);
+                parked.transform.localPosition = new Vector3(6f, 0f, z);
+                BuildCarBody(parked.transform, new Color(0.25f + 0.3f * (float)rng.NextDouble(), 0.3f, 0.55f), withWheels: true);
+            }
+        }
+
+        // ---- 车辆 -----------------------------------------------------
+
+        static GameObject CreateVehicle(VehiclePhysicsProfile profile, Transform parent)
         {
             var car = new GameObject(CarName);
-            car.transform.position = new Vector3(0f, 0.6f, 0f);
+            car.transform.position = new Vector3(1.8f, 0.55f, 0f); // 靠右行驶：右内侧车道（x>0）
 
             var body = car.AddComponent<Rigidbody>();
             body.mass = 1400f;
             body.drag = 0.02f;          // 2022.3 是 drag/angularDrag（Unity 6 才改名 linearDamping）
             body.angularDrag = 0.4f;
 
-            var chassis = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            chassis.name = "Body";
-            chassis.transform.SetParent(car.transform, false);
-            chassis.transform.localPosition = new Vector3(0f, 0.35f, 0f);
-            chassis.transform.localScale = new Vector3(1.8f, 0.6f, 4f);
-            chassis.GetComponent<Renderer>().sharedMaterial = MakeMaterial(new Color(0.75f, 0.2f, 0.18f));
+            BuildCarBody(car.transform, new Color(0.72f, 0.18f, 0.16f), withWheels: true);
 
             var controller = car.AddComponent<VehicleController>();
             controller.profile = profile;
@@ -182,6 +361,58 @@ namespace Copilot.EditorTools
             controller.meshRearRight = meshRR;
 
             return car;
+        }
+
+        /// <summary>
+        /// 用基本体拼一台「看得出是车」的车（供玩家车与路边停车共用）。
+        /// 真车模到位后整个换掉这里即可，WheelCollider 的挂点由 <see cref="AddWheel"/> 负责，不受影响。
+        /// </summary>
+        static void BuildCarBody(Transform root, Color color, bool withWheels)
+        {
+            var bodyMat = MakeMaterial(color);
+
+            // 底盘 + 机舱盖 + 后备箱
+            Box("Chassis", root, new Vector3(0f, 0.62f, 0f), new Vector3(1.82f, 0.5f, 4.2f), bodyMat);
+            Box("Hood", root, new Vector3(0f, 0.92f, 1.35f), new Vector3(1.72f, 0.22f, 1.4f), bodyMat);
+            Box("Trunk", root, new Vector3(0f, 0.92f, -1.45f), new Vector3(1.72f, 0.22f, 1.1f), bodyMat);
+
+            // 驾驶舱（略窄、偏后）
+            Box("Cabin", root, new Vector3(0f, 1.14f, -0.25f), new Vector3(1.6f, 0.56f, 2f), bodyMat);
+
+            // 玻璃：前风挡 / 后风挡 / 两侧窗
+            Box("Windshield", root, new Vector3(0f, 1.12f, 0.78f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
+            Box("RearGlass", root, new Vector3(0f, 1.12f, -1.28f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
+            Box("SideGlassL", root, new Vector3(-0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
+            Box("SideGlassR", root, new Vector3(0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
+
+            // 灯
+            Box("HeadL", root, new Vector3(-0.62f, 0.78f, 2.08f), new Vector3(0.42f, 0.18f, 0.08f), _lightFront);
+            Box("HeadR", root, new Vector3(0.62f, 0.78f, 2.08f), new Vector3(0.42f, 0.18f, 0.08f), _lightFront);
+            Box("TailL", root, new Vector3(-0.6f, 0.82f, -2.08f), new Vector3(0.4f, 0.16f, 0.08f), _lightRear);
+            Box("TailR", root, new Vector3(0.6f, 0.82f, -2.08f), new Vector3(0.4f, 0.16f, 0.08f), _lightRear);
+
+            if (!withWheels) return;
+
+            // 静态车轮（路边停车用；玩家车的轮子由 WheelCollider 管）
+            const float halfTrack = 0.85f;
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    WheelVisual(root, new Vector3(sx * halfTrack, 0.35f, sz * 1.35f), 0.35f);
+                }
+            }
+        }
+
+        static void WheelVisual(Transform parent, Vector3 localPos, float radius)
+        {
+            var go = new GameObject("WheelVisual");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+
+            Cylinder("Tire", go.transform, Vector3.zero, new Vector3(radius * 2f, 0.12f, radius * 2f), _tire);
+            Cylinder("Rim", go.transform, Vector3.zero, new Vector3(radius * 1.1f, 0.13f, radius * 1.1f), _rim);
         }
 
         static WheelCollider AddWheel(Transform parent, string name, Vector3 localPos, float radius, out Transform mesh)
@@ -207,6 +438,7 @@ namespace Copilot.EditorTools
             sideways.stiffness = 1.6f;
             collider.sidewaysFriction = sideways;
 
+            // 可视轮挂在 WheelCollider 下，由 VehicleController 每帧按真实位姿同步
             var visual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             visual.name = "Mesh";
             visual.transform.SetParent(wheel.transform, false);
@@ -214,7 +446,7 @@ namespace Copilot.EditorTools
             // Unity 的 Cylinder 沿 Y 轴、高 2 单位；转 90° 让轴朝 X，再按半径/胎宽缩放
             visual.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
             visual.transform.localScale = new Vector3(radius * 2f, 0.12f, radius * 2f);
-            visual.GetComponent<Renderer>().sharedMaterial = MakeMaterial(new Color(0.12f, 0.12f, 0.13f));
+            visual.GetComponent<Renderer>().sharedMaterial = _tire;
             UnityEngine.Object.DestroyImmediate(visual.GetComponent<Collider>()); // 轮子只靠 WheelCollider 物理
 
             mesh = visual.transform;
@@ -228,7 +460,7 @@ namespace Copilot.EditorTools
             go.tag = "MainCamera";
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.53f, 0.68f, 0.82f);
+            cam.backgroundColor = new Color(0.62f, 0.72f, 0.82f);
             cam.farClipPlane = 800f;
             go.AddComponent<AudioListener>();
 
@@ -340,6 +572,42 @@ namespace Copilot.EditorTools
             hud.recordIndicator = recordDot;
         }
 
+        // ---- 小工具 ---------------------------------------------------
+
+        static Material MakeMaterial(Color color, Color? emission = null)
+        {
+            var shader = Shader.Find("Standard") ?? Shader.Find("Universal Render Pipeline/Lit");
+            var mat = new Material(shader) { color = color };
+            if (emission.HasValue)
+            {
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", emission.Value);
+            }
+            return mat;
+        }
+
+        static GameObject Box(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = scale;
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            return go;
+        }
+
+        static GameObject Cylinder(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = scale;
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            return go;
+        }
+
         static Font BuiltinFont()
         {
             // 2022.3 起内置字体改名；两个都试，保证新老版本都能生成
@@ -436,10 +704,76 @@ namespace Copilot.EditorTools
             Requires(chase != null && chase.target != null, "ChaseCamera.target 未连", problems);
             Requires(FindInScene<Camera>(scene) != null, "场景里没有 Camera", problems);
 
+            // 场景内容：确认 P9 的城市几何真的生成了（空场景也能「校验通过」就没意义了）
+            Requires(CountInScene(scene, "Building") >= 10, "楼群数量不足（<10），城市没生成", problems);
+            Requires(CountInScene(scene, "StreetLight") >= 8, "路灯数量不足（<8）", problems);
+            Requires(CountInScene(scene, "LaneDash") >= 20, "车道虚线数量不足（<20）", problems);
+            Requires(CountInScene(scene, "ParkedCar") >= 1, "没有路边停车", problems);
+
             if (problems.Length > 0) throw Fail(problems);
 
             Debug.Log("[SceneBuilder] 校验通过：场景结构完整（" + scene.path + "）");
         }
+
+        // ---------------------------------------------------------------- 预览图
+
+        /// <summary>
+        /// 把场景渲染成一张 PNG。
+        ///
+        /// 存在的理由：`-batchmode` 下没法用眼睛看，容易被「结构校验通过」骗过去 ——
+        /// 引用都连上了不代表画面对。这里用 <c>Camera.Render</c> 渲到 RenderTexture 再存盘，
+        /// 人和 CI 都能直接看图。<c>ChaseCamera</c> 在编辑模式不跑，相机停在生成时摆的位置，
+        /// 所以看到的就是开局镜头。
+        /// </summary>
+        public static string Capture()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var cam = FindInScene<Camera>(scene);
+            if (cam == null) throw new InvalidOperationException("场景里没有 Camera");
+
+            const int width = 1280;
+            const int height = 720;
+            var path = RepoPath(PreviewRelativePath);
+
+            var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+            var previousTarget = cam.targetTexture;
+            var previousActive = RenderTexture.active;
+
+            try
+            {
+                cam.targetTexture = rt;
+                cam.Render();
+
+                RenderTexture.active = rt;
+                var tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+                tex.Apply();
+
+                var png = tex.EncodeToPNG();
+                Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+                File.WriteAllBytes(path, png);
+
+                UnityEngine.Object.DestroyImmediate(tex);
+                Debug.Log($"[SceneBuilder] 预览图已生成：{path}（{png.Length / 1024} KB）");
+                return path;
+            }
+            finally
+            {
+                cam.targetTexture = previousTarget;
+                RenderTexture.active = previousActive;
+                UnityEngine.Object.DestroyImmediate(rt);
+            }
+        }
+
+        static string RepoPath(string relative)
+        {
+            var unityProject = Directory.GetParent(Application.dataPath)?.FullName;
+            var repo = unityProject == null ? null : Directory.GetParent(unityProject)?.FullName;
+            if (repo == null) throw new InvalidOperationException("无法定位仓库根目录");
+            return Path.Combine(repo, relative);
+        }
+
+        // ---- 通用 ---------------------------------------------------
 
         static T FindInScene<T>(Scene scene) where T : Component
         {
@@ -449,6 +783,26 @@ namespace Copilot.EditorTools
                 if (found != null) return found;
             }
             return null;
+        }
+
+        static int CountInScene(Scene scene, string name)
+        {
+            int count = 0;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                count += CountNamed(root.transform, name);
+            }
+            return count;
+        }
+
+        static int CountNamed(Transform t, string name)
+        {
+            int count = t.name == name ? 1 : 0;
+            for (int i = 0; i < t.childCount; i++)
+            {
+                count += CountNamed(t.GetChild(i), name);
+            }
+            return count;
         }
 
         static void Requires(bool condition, string message, StringBuilder problems)

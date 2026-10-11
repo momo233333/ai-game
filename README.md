@@ -117,9 +117,12 @@ powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
 #    ① 连通性自检：文本回合 + 语音回合（真 ASR）两条腿
 & "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
   -executeMethod Copilot.EditorTools.SmokeTest.Run -logFile logs\unity_smoke.log
-#    ② 场景结构自检：逐项断言生成场景里该连的引用都连上了
+#    ② 场景结构自检：逐项断言生成场景里该连的引用都连上了（含楼群/路灯等数量断言）
 & "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
   -executeMethod Copilot.EditorTools.SceneBuilder.ValidateAndExit -logFile logs\unity_validate.log
+#    ③ 渲染一张场景预览图（batchmode 看不见画面时的唯一办法）→ logs\unity_scene_preview.png
+& "<UnityEditor>\Unity.exe" -batchmode -projectPath unity `
+  -executeMethod Copilot.EditorTools.SceneBuilder.CaptureAndExit -logFile logs\unity_preview.log
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。
