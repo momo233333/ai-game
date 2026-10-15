@@ -171,6 +171,22 @@ namespace Copilot.Core.Gameplay
             return true;
         }
 
+        /// <summary>
+        /// 重开一局：清掉全部运行时状态，剧本从头再演一遍（<see cref="Resolved"/> 订阅者不受影响）。
+        /// </summary>
+        public void Reset()
+        {
+            _index = 0;
+            _phase = MistakePhase.Idle;
+            _current = null;
+            _remainingMs = 0f;
+            _windowTotalMs = 0f;
+            _dwellMs = 0f;
+            _cooldownMs = 0f;
+            FiredCount = 0;
+            LastOutcome = null;
+        }
+
         bool IsPhysicallyBreached(MistakeDefinition def, MistakeContext ctx)
         {
             if (def.LaneOffsetFailM < float.PositiveInfinity

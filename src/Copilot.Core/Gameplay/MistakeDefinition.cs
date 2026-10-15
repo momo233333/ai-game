@@ -135,6 +135,30 @@ namespace Copilot.Core.Gameplay
     }
 
     /// <summary>
+    /// 一句语音提示：**把语音库 id 与字幕文本绑在一起**。
+    ///
+    /// 两者必须一致（`Id` 在 `voice-corpus/lines.csv` 里的文本 == <see cref="Text"/>），
+    /// 有单测钉死 —— 否则又会变成"看到的和听到的不是同一句"（H 阶段踩过这个坑）。
+    /// <see cref="HasVoice"/> 为 false 时只出字幕（语音库没这条 / Unity 拿不到语音库）。
+    /// </summary>
+    public sealed class VoiceCue
+    {
+        public VoiceCue(string id, string text)
+        {
+            Id = id ?? string.Empty;
+            Text = text ?? string.Empty;
+        }
+
+        /// <summary>语音库条目 id（如 "L072"）；空 = 没有语音。</summary>
+        public string Id { get; }
+
+        /// <summary>字幕兜底文本。</summary>
+        public string Text { get; }
+
+        public bool HasVoice => !string.IsNullOrEmpty(Id);
+    }
+
+    /// <summary>
     /// 一个剧本失误：什么时候演、演什么错、玩家说什么算救回来、没救回会出什么事。
     /// </summary>
     public sealed class MistakeDefinition
@@ -143,7 +167,7 @@ namespace Copilot.Core.Gameplay
         {
             Id = id ?? throw new ArgumentNullException(nameof(id));
             Title = title ?? string.Empty;
-            PanicLine = panicLine ?? string.Empty;
+            Panic = new VoiceCue(string.Empty, panicLine ?? string.Empty);
         }
 
         /// <summary>唯一标识（日志与测试用）。</summary>
@@ -152,8 +176,17 @@ namespace Copilot.Core.Gameplay
         /// <summary>HUD 警告横幅上的字，如「她偏出车道了！」。</summary>
         public string Title { get; }
 
-        /// <summary>开演时小雅自己说的那句（走 DialogueBubble，不进 LLM）。</summary>
-        public string PanicLine { get; }
+        /// <summary>开演时她自己说的那句（她慌了）。</summary>
+        public VoiceCue Panic { get; set; }
+
+        /// <summary>玩家及时救回来之后她说的那句。</summary>
+        public VoiceCue Saved { get; set; } = new VoiceCue(string.Empty, string.Empty);
+
+        /// <summary>没救住之后她说的那句。</summary>
+        public VoiceCue Failed { get; set; } = new VoiceCue(string.Empty, string.Empty);
+
+        /// <summary>开演台词的兜底文本（= <see cref="Panic"/>.Text，保留这个便捷名给调用方）。</summary>
+        public string PanicLine => Panic.Text;
 
         public MistakeTrigger Trigger { get; set; } = new MistakeTrigger();
 

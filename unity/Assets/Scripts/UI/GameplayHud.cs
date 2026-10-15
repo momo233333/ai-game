@@ -42,6 +42,9 @@ namespace Copilot.UI
         [Tooltip("手动结算（免走完六步就能看面板）")]
         public KeyCode settleKey = KeyCode.Return;
 
+        [Tooltip("重开一局（结算之后再来一遍）")]
+        public KeyCode restartKey = KeyCode.R;
+
         [SerializeField] Color _savedColor = new Color(0.3f, 0.9f, 0.45f, 0.85f);
         [SerializeField] Color _failedColor = new Color(0.9f, 0.3f, 0.25f, 0.85f);
         [SerializeField] Color _warningColor = new Color(0.95f, 0.6f, 0.15f, 0.85f);
@@ -149,13 +152,38 @@ namespace Copilot.UI
         {
             if (runner == null) return;
 
-            if (!_settled && tutorial != null && tutorial.Progress != null && tutorial.Progress.IsCompleted)
+            // 重开一局（由 MistakeRunner.RestartLevel 回调 ResetForNewRun 收起面板）
+            if (Input.GetKeyDown(restartKey))
+            {
+                runner.RestartLevel();
+                return;
+            }
+
+            if (!_settled && tutorial != null && tutorial.Progress.IsCompleted)
             {
                 if (_completedAt < 0f) _completedAt = Time.time;
                 if (Time.time - _completedAt >= settleDelaySeconds) ShowSettlement();
             }
 
             if (!_settled && Input.GetKeyDown(settleKey)) ShowSettlement();
+        }
+
+        /// <summary>重开一局：面板收起、结算标记与闪烁清空（由 <c>MistakeRunner.RestartLevel</c> 调用）。</summary>
+        public void ResetForNewRun()
+        {
+            _settled = false;
+            _completedAt = -1f;
+            _flashUntil = -1f;
+            _flashText = string.Empty;
+
+            if (settlementPanel != null) settlementPanel.SetActive(false);
+            if (settlementStats != null) settlementStats.text = string.Empty;
+            if (settlementStars != null) settlementStars.text = string.Empty;
+            if (settlementItems != null) settlementItems.text = string.Empty;
+            if (bannerLabel != null) bannerLabel.text = string.Empty;
+            if (scoreLabel != null) scoreLabel.text = string.Empty;
+
+            SetBannerVisible(false);
         }
 
         void OnMistakeOpened(MistakeDefinition def)

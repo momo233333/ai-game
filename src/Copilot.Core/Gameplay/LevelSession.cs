@@ -164,6 +164,17 @@ namespace Copilot.Core.Gameplay
             return new SettlementReport(safety, intervention, tutorial, score, stars, items);
         }
 
+        /// <summary>重开一局：所有计数清零、信任回到初始值（关卡标识与总步数保持不变）。</summary>
+        public void Reset()
+        {
+            StepsCompleted = 0;
+            Saves = 0;
+            Misses = 0;
+            Collisions = 0;
+            LaneDepartures = 0;
+            FinalTrust = TrustState.InitialTrust;
+        }
+
         static int Clamp(int value, int min, int max)
         {
             if (value < min) return min;

@@ -44,6 +44,11 @@ namespace Copilot.Core.Gameplay
             LaneOffsetFailM = 1.0f,
             FailLocalEvent = "lane_departure",
             RequiresLaneGeometry = true,
+
+            // 语音提示（id 与文本必须一致，有单测钉死；Unity 拿不到语音库时只用文本）
+            Panic = new VoiceCue("L072", "哎哎哎——我这方向盘怎么飘了？"),
+            Saved = new VoiceCue("L074", "呼……回正了回正了，吓我一跳"),
+            Failed = new VoiceCue("L076", "教练你怎么不早说呀，我都飘出去了"),
         };
 
         /// <summary>
@@ -80,6 +85,10 @@ namespace Copilot.Core.Gameplay
             FailLocalEvent = "hard_brake",
             CollisionLocalEvent = "collision",
             RequiresLaneGeometry = false,
+
+            Panic = new VoiceCue("L073", "前面有车！我、我忘了踩刹车……"),
+            Saved = new VoiceCue("L075", "刹车了刹车了，好险好险"),
+            Failed = new VoiceCue("L077", "我、我刚才是不是差点撞上……"),
         };
 
         /// <summary>科目一 · 教学关的剧本失误（严格按此顺序演）。</summary>

@@ -10,7 +10,9 @@ public class VoiceLibTests
     {
         var lib = TestPaths.LoadVoiceLib();
 
-        Assert.Equal(71, lib.Items.Count);
+        // 条数用「不少于」而不是精确等于：语料只会增加（P 轮加 71 条、W 轮加 6 条玩法台词），
+        // 每次加台词都要回来改测试数字是纯负担；这里要防的是「语料被删」而不是「被加」。
+        Assert.True(lib.Items.Count >= 71, $"语音库条数不足：{lib.Items.Count}");
         Assert.Equal(24000, lib.SampleRate);
         Assert.All(lib.Items, e => Assert.NotNull(e.AbsoluteWavPath));
     }

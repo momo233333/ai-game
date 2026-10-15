@@ -82,6 +82,18 @@ namespace Copilot.Vehicle
             return applied;
         }
 
+        /// <summary>重开一局：清掉残留动作 —— 否则上一局的指令会继续把车推出去。</summary>
+        public void Reset()
+        {
+            _target = null;
+            _active = false;
+            _elapsedMs = 0f;
+            _steer = 0f;
+            _throttle = 0f;
+            _brake = 0f;
+            Current = null;
+        }
+
         void FixedUpdate()
         {
             float dtMs = Time.fixedDeltaTime * 1000f;

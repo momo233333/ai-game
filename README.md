@@ -4,13 +4,15 @@
 Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR / LLM / TTS 全本地推理），两者同语言、共享契约与纯逻辑类库。
 
 > **玩法**：第一人称坐在**副驾驶当教练**，用语音教女学员**小雅**开车；科目一到科目四共四关，
-> 当前实现**科目一 · 教学关**（起步 → 左转 → 右转 → 变道 → 减速 → 靠边停车）。
+> **🏁 第一阶段里程碑 = 科目一 · 教学关（起步 → 左转 → 右转 → 变道 → 减速 → 靠边停车）已达成**，
+> 科目二~四在里程碑之后才开发（`LevelCatalog` 里已占位，见 [`开发进度.md`](开发进度.md)）。
 >
 > **她会主动犯错**：剧本化的两个失误 —— **偏出车道**（她自顾自往右飘）与**忘了刹车**（一路给油冲向前车）。
 > 屏幕中上部会弹出**警告横幅 + 倒计时**，你得在窗口内（2.6–2.8 秒）开口才救得回来；
-> 没喊住 → 按她的真实物理后果结算（压线 / 差点追尾 / 撞上），并且**当场听得见、看得见她出事**。
+> 没喊住 → 按她的真实物理后果结算（压线 / 差点追尾 / 撞上），并且**当场听得见、看得见她出事**
+> —— 慌乱/救回的台词是**真的会出声**的（Unity 本地播语音库，见下文）。
 > 关卡结束有**三项指标评分 + 星级**：安全 40 + 及时干预 40 + 教学完成 20（★门槛 90/70/50）。
-> 调试时按 **Enter** 可随时弹出结算面板。
+> 调试时按 **Enter** 可随时弹出结算面板；**按 R 重开一局**（关卡可重玩：失误剧本、车辆、信任、HUD 全部归位）。
 >
 > **HUD**：右下角实时显示**车速**与**方向盘转角**（看不见这两个数就没法在她犯错前干预）。
 > **可执行动作 7 个**：左转 / 右转 / 加速 / 刹车 / 变道 / 靠边停车 / **倒车**（倒车 = 负油门）。
@@ -19,8 +21,10 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 > 说「打方向盘」而不说往哪边时，她会**反问你「往哪边？」**——这是正确行为，猜一个方向才是错的。
 >
 > **妹妹说的话是大模型现编的**：`tts_audio` 走实时合成（**sherpa-onnx + MeloTTS 中文开源模型，本地离线**），
-> 语料库 71 条也用**同一个引擎**重录，所以整场只有一个嗓门：
+> 语料库 **77 条**也用**同一个引擎**重录，所以整场只有一个嗓门：
 > 她会针对你刚说的话回答（「你叫什么名字」→「我、我叫小雅……您是教练对吧？」），而不是背固定台词。
+> 玩法失误的**恐慌/救回台词**走 **Unity 本地播语音库**（`LocalVoiceLib`，不经服务端回合）——
+> 字幕显示的文本**就是实际播出的那条**（`VoiceCue` 把 id 与文本绑在一起），不会"听到≠看到"。
 
 > **开发进度 / 环境快照 / 已知问题 / 下一步** 见 [`开发进度.md`](开发进度.md) —— 每次开工先读它，完成阶段后更新它。
 
@@ -61,18 +65,19 @@ ai-game/
 │   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 181 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集 + 玩法层）
+│   ├── Copilot.Tests/          # xUnit 186 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集 + 玩法层）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：41 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
 ├── data/sensitive_words.txt    # 共享敏感词表
-├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（71 条 24kHz）
+├── voice-corpus/               # 台词语料 lines.csv + manifest.json + wavs/（77 条 24kHz）
 ├── tools/                      # fetch_models.ps1 / make_command_samples.ps1 / build_unity_plugins.ps1
-│                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
+│                               #   + unity_batch.ps1 / command_samples.txt / voicelib_gen.py / voicelib_synth.py
 ├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC-Web
-│                               #   Assets/Scripts（运行时）+ Assets/Editor（自检 + 场景生成器）
-│                               #   Assets/Scripts/Gameplay（RoadGeometry / MistakeRunner）玩法层
-│                               #   Assets/Scenes/Greybox.unity（生成的可玩灰盒场景）
+│                               #   Assets/Scripts（运行时）+ Assets/Editor（自检 + 场景生成器 + 自动通关）
+│                               #   Assets/Scripts/Gameplay（RoadGeometry / VehicleSensors / MistakeRunner）玩法层
+│                               #   Assets/Scripts/Audio/LocalVoiceLib.cs（本地播语音库：她的恐慌/救回台词）
+│                               #   Assets/Scenes/Greybox.unity（生成的可玩灰盒场景，三张预览图在 logs/）
 │                               #   Assets/Plugins/Copilot（DLL，gitignore，由脚本生成）
 └── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
 ```
@@ -90,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1              # �
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only tts    # 只下 TTS（MeloTTS，162 MB）
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（181 项）
+# 1) 编译（0 警告 0 错误）+ 测试（186 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -118,7 +123,9 @@ dotnet run --project src\Copilot.AIService -- --mic --free --speak              
 dotnet run --project src\Copilot.AIService -- --vad tests\samples\left_turn.wav   # VAD 诊断（无麦克风也能验）
 dotnet run --project src\Copilot.AIService -- --play "行，左转交给我"              # 仅验证音频输出
 #   换 TTS 引擎后重录语料（语料库与实时合成必须是同一个嗓门，否则一句话两个声音）
+#   ⚠️ --synth-voicelib 只重写 wav；新增/改名台词后还要刷 manifest，否则 Unity 本地听不到新台词：
 dotnet run --project src\Copilot.AIService -- --synth-voicelib
+python tools\voicelib_gen.py
 
 # 6) 起 gRPC 服务（供 Unity 接入）
 dotnet run --project src\Copilot.AIService -- --server
@@ -151,7 +158,8 @@ powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.E
 #      · SmokeTest.Run        连通性自检：文本回合 + 语音回合（真 ASR）
 #      · SceneBuilder.BuildAndExit     重新生成 Assets/Scenes/Greybox.unity
 #      · SceneBuilder.ValidateAndExit  场景结构自检（引用 + 内容数量断言）
-#      · SceneBuilder.CaptureAndExit   渲染预览图 → logs\unity_scene_preview*.png
+#      · SceneBuilder.CaptureAndExit   渲染预览图 → logs\unity_scene_preview*.png（三张）
+#      · GameplaySelfTest.RunAndExit   自动通关一局（不靠人手玩）：六步 + 两个失误 + 重开 + 结算 + 本地语音库
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。
@@ -178,6 +186,13 @@ powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.E
   避免"失误失败"与"传感器独立检测"指向同一起事故时被各记一次。
   失误动作经 `ActionExecutor.Execute()` **本地注入**（不过 gRPC），所以玩家的下一句话天然覆盖它 ——
   这就是「抢在之前干预」，同时也保证了**她犯的错不会被算成教学过关**。
+  - **她的恐慌/救回台词走本地语音库**（`LocalVoiceLib` + `TtsPlayer.PlayLocal`）：`TtsRouter` 只在服务端回合内跑，
+    而失误是本地事件、没有服务端回合，所以必须由 Unity 直接播 `voice-corpus` 里的 wav。
+    台词用 `GAMEPLAY` 标签（不混进意图兜底池），`VoiceCue` 把 **id 与字幕文本绑在一起**，播到哪条就显示哪条。
+  - **关卡可重玩（R）**：`MistakeRunner.RestartLevel()` 串起一条从 Core 到 Unity 的 `Reset()` 链，
+    把失误剧本、教学进度、车辆、信任、HUD 全部归位。
+  - **自动通关自检**：`GameplaySelfTest` 在编辑模式跑完整一局（喂合成 `MistakeContext`），
+    断言结算分与星级 —— 玩法改动不再靠人手试。
 
 ## gRPC 契约
 

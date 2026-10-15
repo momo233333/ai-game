@@ -139,6 +139,14 @@ namespace Copilot.State
             PushState();
         }
 
+        /// <summary>重开一局：信任回到初始值，并把结果同步给服务端（SyncGameState 会覆盖它那边的值）。</summary>
+        public void ResetTrust()
+        {
+            _trust.Set(TrustState.InitialTrust, Emotion.Calm);
+            if (StateChanged != null) StateChanged(_trust.Trust, _trust.Emotion, 0f);
+            PushState();
+        }
+
         public void SetScene(string newSceneId, string newWeather, string newTimeOfDay, string newLevelId)
         {
             sceneId = newSceneId;

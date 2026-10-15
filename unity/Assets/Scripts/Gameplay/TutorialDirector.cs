@@ -33,12 +33,41 @@ namespace Copilot.Gameplay
 
         TutorialProgress _progress;
 
-        public TutorialProgress Progress => _progress;
+        /// <summary>
+        /// 当前进度。**getter 保证非空**（在 <see cref="Awake"/> 里建），所以调用方不必再判 null
+        /// —— 之前它是在 <c>Start</c> 里建的，Start 之前拿到 null 是个坑（编辑模式也不会跑 Start）。
+        /// </summary>
+        public TutorialProgress Progress
+        {
+            get
+            {
+                EnsureProgress();
+                return _progress;
+            }
+        }
+
+        void Awake()
+        {
+            EnsureProgress();
+        }
 
         void Start()
         {
-            _progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+            EnsureProgress();
             if (connection != null) connection.TurnEventReceived += OnTurnEvent;
+            Refresh();
+        }
+
+        void EnsureProgress()
+        {
+            if (_progress == null) _progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        }
+
+        /// <summary>重开一局：教学进度回到第一步并刷新 HUD。</summary>
+        public void ResetProgress()
+        {
+            EnsureProgress();
+            _progress.Reset();
             Refresh();
         }
 

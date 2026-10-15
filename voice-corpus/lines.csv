@@ -70,3 +70,9 @@ L068,停车前要不要先打转向灯啊,CALM,PARK,57
 L069,倒车我会！我模拟器上倒库满分,HAPPY,REVERSE,72
 L070,倒车……我、我倒车不太熟啊,NERVOUS,REVERSE,70
 L071,好，我挂倒挡，慢慢往后倒,CALM,REVERSE,66
+L072,哎哎哎——我这方向盘怎么飘了？,NERVOUS,GAMEPLAY,80
+L073,前面有车！我、我忘了踩刹车……,NERVOUS,GAMEPLAY,80
+L074,呼……回正了回正了，吓我一跳,CALM,GAMEPLAY,78
+L075,刹车了刹车了，好险好险,CALM,GAMEPLAY,78
+L076,教练你怎么不早说呀，我都飘出去了,NERVOUS,GAMEPLAY,76
+L077,我、我刚才是不是差点撞上……,NERVOUS,GAMEPLAY,76

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-10-11T16:33:54",
+  "generated_at": "2026-10-16T00:12:55",
   "source_csv": "voice-corpus\\lines.csv",
   "sample_rate": 24000,
   "items": [
@@ -713,6 +713,66 @@
       ],
       "priority": 66,
       "wav_path": "wavs/L071.wav"
+    },
+    {
+      "id": "L072",
+      "text": "哎哎哎——我这方向盘怎么飘了？",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "GAMEPLAY"
+      ],
+      "priority": 80,
+      "wav_path": "wavs/L072.wav"
+    },
+    {
+      "id": "L073",
+      "text": "前面有车！我、我忘了踩刹车……",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "GAMEPLAY"
+      ],
+      "priority": 80,
+      "wav_path": "wavs/L073.wav"
+    },
+    {
+      "id": "L074",
+      "text": "呼……回正了回正了，吓我一跳",
+      "emotion": "CALM",
+      "intent_tags": [
+        "GAMEPLAY"
+      ],
+      "priority": 78,
+      "wav_path": "wavs/L074.wav"
+    },
+    {
+      "id": "L075",
+      "text": "刹车了刹车了，好险好险",
+      "emotion": "CALM",
+      "intent_tags": [
+        "GAMEPLAY"
+      ],
+      "priority": 78,
+      "wav_path": "wavs/L075.wav"
+    },
+    {
+      "id": "L076",
+      "text": "教练你怎么不早说呀，我都飘出去了",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "GAMEPLAY"
+      ],
+      "priority": 76,
+      "wav_path": "wavs/L076.wav"
+    },
+    {
+      "id": "L077",
+      "text": "我、我刚才是不是差点撞上……",
+      "emotion": "NERVOUS",
+      "intent_tags": [
+        "GAMEPLAY"
+      ],
+      "priority": 76,
+      "wav_path": "wavs/L077.wav"
     }
   ]
 }

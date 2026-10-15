@@ -47,6 +47,7 @@ $defaultMethods = @(
     "Copilot.EditorTools.SceneBuilder.BuildAndExit",
     "Copilot.EditorTools.SceneBuilder.ValidateAndExit",
     "Copilot.EditorTools.SceneBuilder.CaptureAndExit",
+    "Copilot.EditorTools.GameplaySelfTest.RunAndExit",
     "Copilot.EditorTools.SmokeTest.Run"
 )
 

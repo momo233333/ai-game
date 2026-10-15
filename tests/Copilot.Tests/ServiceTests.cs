@@ -33,7 +33,8 @@ public class ConfigTests
     {
         var config = Config.Load();
 
-        Assert.Equal(71, VoiceLib.Load(config.ResolvePath(config.Tts.VoicelibManifest)).Items.Count);
+        // 「不少于」而不是精确等于 —— 语料只增不减（理由见 VoiceLibTests）
+        Assert.True(VoiceLib.Load(config.ResolvePath(config.Tts.VoicelibManifest)).Items.Count >= 71);
         Assert.Equal(8, SafetyFilter.FromFile(config.ResolvePath(config.Safety.WordsFile)).Count);
     }
 
@@ -146,7 +147,7 @@ public class AiRuntimeTests
         Assert.Equal("rule", runtime.Llm.Name);
         Assert.Equal("voicelib", runtime.Tts.Name);
         Assert.Null(runtime.Asr);
-        Assert.Equal(71, runtime.VoiceLib.Items.Count);
+        Assert.True(runtime.VoiceLib.Items.Count >= 71);
         Assert.Equal(8, runtime.Safety.Count);
     }
 

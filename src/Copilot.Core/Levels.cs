@@ -131,6 +131,9 @@ namespace Copilot.Core.Levels
         /// <summary>已完成步数 / 总步数（HUD 显示）。</summary>
         public int TotalSteps => Level.Steps.Count;
 
+        /// <summary>重开一局：回到第一步。</summary>
+        public void Reset() => StepIndex = 0;
+
         /// <summary>
         /// 观察一个学员的实际动作。返回 true 表示这一步过掉了（HUD 该刷新）。
         /// </summary>

@@ -36,6 +36,12 @@ namespace Copilot.Gameplay
         public VehicleSensors sensors;
         public TutorialDirector tutorial;
         public DialogueBubble bubble;
+        public GameplayHud gameplayHud;
+
+        [Tooltip("本地语音库（她把慌乱/松口气说出来）；拿不到就只用字幕，见 LocalVoiceLib")]
+        public LocalVoiceLib localVoice;
+        [Tooltip("播放本地语音用的播放器（与妹妹说话同一条队列）")]
+        public TtsPlayer ttsPlayer;
 
         [Header("剧本")]
         [Tooltip("两次失误之间至少隔这么久（秒）")]
@@ -51,7 +57,10 @@ namespace Copilot.Gameplay
         public float duplicateWindowSeconds = 2f;
 
         MistakeDirector _director;
+        LevelSession _session;
         Transform _hazardCar;
+        /// <summary>当前/刚结案的那个失误定义 —— 结案时要按它取"松口气/懊恼"那句。</summary>
+        MistakeDefinition _lastDef;
 
         Vector3 _lastPosition;
         float _distanceM;
@@ -63,14 +72,42 @@ namespace Copilot.Gameplay
         CopilotConnection _boundConnection;
         VehicleSensors _boundSensors;
 
-        public MistakePhase Phase => _director.Phase;
+        public MistakePhase Phase
+        {
+            get
+            {
+                EnsureInitialized();
+                return _director.Phase;
+            }
+        }
 
         /// <summary>当前正在等干预的失误（Idle 时为 null）。</summary>
-        public MistakeDefinition Current => _director.Current;
+        public MistakeDefinition Current
+        {
+            get
+            {
+                EnsureInitialized();
+                return _director.Current;
+            }
+        }
 
-        public float RemainingMs => _director.RemainingMs;
+        public float RemainingMs
+        {
+            get
+            {
+                EnsureInitialized();
+                return _director.RemainingMs;
+            }
+        }
 
-        public LevelSession Session { get; private set; }
+        public LevelSession Session
+        {
+            get
+            {
+                EnsureInitialized();
+                return _session;
+            }
+        }
 
         /// <summary>失误开演（HUD 弹横幅用）。</summary>
         public event Action<MistakeDefinition> MistakeOpened;
@@ -80,8 +117,22 @@ namespace Copilot.Gameplay
 
         void Awake()
         {
+            EnsureInitialized();
+        }
+
+        /// <summary>
+        /// 懒初始化：**不依赖 <c>Awake</c> 的调用时机**。
+        ///
+        /// 实测教训：在编辑器里给物体 <c>AddComponent</c> **不保证触发 `Awake`**
+        /// （自动化自检就是在编辑模式下驱动这个组件的，结果 `Session` 是 null 直接空引用）。
+        /// 所以状态对象按需创建，而不是只在 `Awake` 里建 —— 与 <see cref="TutorialDirector.Progress"/> 同一处理。
+        /// </summary>
+        void EnsureInitialized()
+        {
+            if (_director != null) return;
+
             var level = LevelCatalog.Subject1Tutorial;
-            Session = new LevelSession(level.Id, level.Steps.Count);
+            _session = new LevelSession(level.Id, level.Steps.Count);
             _director = new MistakeDirector(MistakeCatalog.Subject1Tutorial, cooldownSeconds);
             _director.Resolved += HandleResolved;
             _lastPosition = transform.position;
@@ -138,14 +189,27 @@ namespace Copilot.Gameplay
 
         void Update()
         {
+            EnsureInitialized();
             TrackDistance();
+            Advance(Time.deltaTime * 1000f, BuildContext());
 
-            var tick = _director.Tick(Time.deltaTime * 1000f, BuildContext());
-
-            if (tick.Opened && _director.Current != null)
+            if (tutorial != null)
             {
-                OnOpened(_director.Current);
+                _session.ObserveStepAdvance(tutorial.Progress.StepIndex);
             }
+        }
+
+        /// <summary>
+        /// 推进一帧（<see cref="Update"/> 内部就是调它）。开演 → 注入 → 返回本帧结果。
+        /// **公开出来是为了自动化自检/调试能手动喂合成上下文**（编辑模式下 Update 不跑）。
+        /// </summary>
+        public MistakeTick Advance(float dtMs, MistakeContext ctx)
+        {
+            EnsureInitialized();
+
+            var tick = _director.Tick(dtMs, ctx);
+
+            if (tick.Opened && _director.Current != null) OnOpened(_director.Current);
 
             if (tick.InjectNow && tick.InjectAction != null && executor != null)
             {
@@ -153,10 +217,44 @@ namespace Copilot.Gameplay
                 executor.Execute(tick.InjectAction);
             }
 
-            if (tutorial != null && tutorial.Progress != null)
-            {
-                Session.ObserveStepAdvance(tutorial.Progress.StepIndex);
-            }
+            return tick;
+        }
+
+        /// <summary>
+        /// 玩家这一轮对话**在窗口打开之后才开始**，并且产出了这个动作。
+        /// 自检用它模拟玩家及时干预；事件流路径由 <see cref="OnTurnEvent"/> 判定后调它。
+        /// </summary>
+        public bool SubmitPlayerIntent(string intent)
+        {
+            EnsureInitialized();
+            return _director.ObservePlayerIntent(intent);
+        }
+
+        /// <summary>
+        /// 重开一局：把玩法状态、教学进度、车、信任、HUD 全部复位。
+        /// 顺序有讲究 —— 先清玩法状态再归位车辆，最后收 HUD。
+        /// </summary>
+        public void RestartLevel()
+        {
+            EnsureInitialized();
+
+            _director.Reset();
+            _session.Reset();
+
+            _distanceM = 0f;
+            _lastPosition = transform.position;
+            _turnStartedAfterWarning = false;
+            _lastReportedEvent = string.Empty;
+            _lastReportedAt = -99f;
+            SetHazardActive(false);
+
+            if (tutorial != null) tutorial.ResetProgress();
+            if (executor != null) executor.Reset();
+            if (vehicle != null) vehicle.ResetToStart();
+            if (gameState != null) gameState.ResetTrust();
+            if (gameplayHud != null) gameplayHud.ResetForNewRun();
+
+            Debug.Log("[Mistake] 重开一局：剧本/进度/评分/车/信任 已复位");
         }
 
         MistakeContext BuildContext()
@@ -189,9 +287,10 @@ namespace Copilot.Gameplay
                 def.Id, sensors != null ? sensors.SpeedKmh : 0f,
                 sensors != null ? sensors.LateralOffsetM : 0f, def.WindowMs));
 
-            if (announceOnBubble && bubble != null && !string.IsNullOrEmpty(def.PanicLine))
+            if (announceOnBubble)
             {
-                bubble.ShowLine(def.PanicLine);
+                _lastDef = def;
+                Speak(def.Panic);
             }
 
             if (MistakeOpened != null) MistakeOpened(def);
@@ -233,8 +332,8 @@ namespace Copilot.Gameplay
 
             if (_turnStartedAfterWarning)
             {
-                _director.ObservePlayerIntent(evt.Action.Intent);
                 _turnStartedAfterWarning = false;
+                SubmitPlayerIntent(evt.Action.Intent);
             }
         }
 
@@ -243,7 +342,6 @@ namespace Copilot.Gameplay
         void HandleResolved(MistakeOutcome outcome)
         {
             Session.ObserveMistake(outcome);
-
             if (!outcome.Saved && !string.IsNullOrEmpty(outcome.LocalEventName))
             {
                 ReportLocalEvent(outcome.LocalEventName);
@@ -251,10 +349,33 @@ namespace Copilot.Gameplay
 
             SetHazardActive(false);
 
+            // 救回来/没救住，她自己有话说 —— 优先播本地语音（声音与字幕同源）
+            if (_lastDef != null)
+            {
+                Speak(outcome.Saved ? _lastDef.Saved : _lastDef.Failed);
+                _lastDef = null;
+            }
+
             Debug.Log(string.Format("[Mistake] resolve id={0} kind={1} event={2} reaction={3:0}ms",
                 outcome.Id, outcome.Kind, outcome.LocalEventName, outcome.ReactionMs));
 
             if (MistakeResolved != null) MistakeResolved(outcome);
+        }
+
+        /// <summary>
+        /// 说一句：先试本地语音库，**播到了就用实际播出的那句做字幕**（保证听到=看到）；
+        /// 没播到（语音库拿不到 / 该条没有 wav）才退回 Core 里的兜底文本。
+        /// </summary>
+        void Speak(VoiceCue cue)
+        {
+            if (cue == null) return;
+
+            string played = cue.HasVoice && localVoice != null
+                ? localVoice.PlayById(cue.Id, ttsPlayer)
+                : null;
+
+            string text = played ?? cue.Text;
+            if (bubble != null && !string.IsNullOrEmpty(text)) bubble.ShowLine(text);
         }
 
         void OnCollisionDetected(float impactKmh, string otherName)

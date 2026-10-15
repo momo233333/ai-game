@@ -502,6 +502,38 @@ public static class Cli
         {
             Console.Error.WriteLine($"[重录] 失败 {failed.Count} 条：{string.Join(",", failed)}");
         }
+
+        WarnIfManifestMissing(rows, manifest);
+    }
+
+    /// <summary>
+    /// 重录只写 wav，**manifest 得由 <c>tools/voicelib_gen.py</c> 刷新**（单一生成器，不在这里再实现一份）。
+    /// 新增 id 时忘了刷 manifest，游戏里就找不到那条语音 —— 而且**没有任何报错**，所以这里必须主动吼一声。
+    /// </summary>
+    private static void WarnIfManifestMissing(List<(string Id, string Text)> rows, string manifestPath)
+    {
+        if (!File.Exists(manifestPath)) return;
+
+        var missing = new List<string>();
+        try
+        {
+            var loaded = VoiceLib.Load(manifestPath);
+            foreach (var (id, _) in rows)
+            {
+                if (loaded.FindById(id) == null) missing.Add(id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[重录] 读 manifest 失败：{ex.Message}");
+            return;
+        }
+
+        if (missing.Count == 0) return;
+
+        Console.Error.WriteLine($"[重录] ⚠️ manifest 里没有这些 id：{string.Join(",", missing)}");
+        Console.Error.WriteLine("       合成只写了 wav —— 请刷新 manifest，否则游戏里找不到这些语音：");
+        Console.Error.WriteLine("       python tools\\voicelib_gen.py");
     }
 
     /// <summary>读 `lines.csv` 的 id/text 两列（表头跳过；台词里不含 ASCII 逗号，直接按逗号切即可）。</summary>

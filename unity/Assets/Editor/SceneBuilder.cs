@@ -43,6 +43,7 @@ namespace Copilot.EditorTools
         const string ProfilePath = "Assets/VehiclePhysicsProfile.asset";
         const string PreviewRelativePath = "logs/unity_scene_preview.png";
         const string DriverPreviewRelativePath = "logs/unity_scene_preview_driver.png";
+        const string SettlePreviewRelativePath = "logs/unity_scene_preview_settle.png";
 
         const string RigName = "CopilotRig";
         const string CarName = "Car";
@@ -63,7 +64,9 @@ namespace Copilot.EditorTools
         static Material _bldA, _bldB, _bldC, _window, _roof;
         static Material _pole, _lamp;
         static Material _body, _glass, _tire, _rim, _lightFront, _lightRear, _cone;
+        static Material _bumper, _grille, _chrome, _plate;
         static Material _dash, _console, _seat, _cabinTrim, _skin, _hair, _cloth, _mirror;
+        static Material _eyeWhite, _pupil, _brow, _lip, _shoe, _collar;
 
         [MenuItem("副驾指令/生成灰盒场景")]
         public static void BuildFromMenu()
@@ -161,6 +164,12 @@ namespace Copilot.EditorTools
             _lightRear = MakeMaterial(new Color(0.9f, 0.15f, 0.12f), new Color(1f, 0.15f, 0.1f) * 1.5f);
             _cone = MakeMaterial(new Color(0.95f, 0.45f, 0.10f));
 
+            // 车身高细节件（P 轮加：让车身不是一个色块）
+            _bumper = MakeMaterial(new Color(0.17f, 0.17f, 0.18f));   // 保险杠/侧裙：深色塑料
+            _grille = MakeMaterial(new Color(0.07f, 0.07f, 0.08f));   // 格栅/灯罩/门缝：近黑
+            _chrome = MakeMaterial(new Color(0.82f, 0.83f, 0.86f));   // 轮辋中心盖/饰条
+            _plate = MakeMaterial(new Color(0.90f, 0.90f, 0.84f));    // 车牌
+
             // 车内（第一人称副驾视角要看到的东西）
             _dash = MakeMaterial(new Color(0.16f, 0.16f, 0.17f));
             _console = MakeMaterial(new Color(0.11f, 0.11f, 0.12f));
@@ -170,6 +179,14 @@ namespace Copilot.EditorTools
             _skin = MakeMaterial(new Color(0.93f, 0.80f, 0.70f));
             _hair = MakeMaterial(new Color(0.15f, 0.11f, 0.10f));
             _cloth = MakeMaterial(new Color(0.42f, 0.52f, 0.68f));   // 学员的衣服
+
+            // 学员的五官与零件（P 轮加：方盒躯干 + 圆柱脸无论怎么摆都读作积木）
+            _eyeWhite = MakeMaterial(new Color(0.95f, 0.95f, 0.93f));
+            _pupil = MakeMaterial(new Color(0.10f, 0.09f, 0.10f));
+            _brow = MakeMaterial(new Color(0.13f, 0.10f, 0.09f));
+            _lip = MakeMaterial(new Color(0.72f, 0.35f, 0.34f));
+            _shoe = MakeMaterial(new Color(0.16f, 0.16f, 0.18f));
+            _collar = MakeMaterial(new Color(0.30f, 0.38f, 0.52f));
         }
 
         static void SetupEnvironment()
@@ -377,7 +394,9 @@ namespace Copilot.EditorTools
 
             // 玩家的车要「敞篷」：不开顶盖的实心 Cabin，改由车内件（顶棚/A柱/门板）拼，
             // 否则第一人称相机就坐在实心盒子里，朝前看是一片黑。
-            BuildCarBody(car.transform, new Color(0.72f, 0.18f, 0.16f), withWheels: true, openCabin: true);
+            // 玩家的轮子由 AddWheel（WheelCollider + 可视轮）负责 —— 这里**不要**再建静态轮，
+            // 否则会和可动轮重叠（同一位置两套网格 → 加辐条后会明显闪烁/z-fighting）
+            BuildCarBody(car.transform, new Color(0.72f, 0.18f, 0.16f), withWheels: false, openCabin: true);
 
             var controller = car.AddComponent<VehicleController>();
             controller.profile = profile;
@@ -462,34 +481,83 @@ namespace Copilot.EditorTools
             avatar.transform.SetParent(car, false);
             avatar.transform.localPosition = new Vector3(-0.42f, 0.68f, -0.2f);
 
-            Box("Torso", avatar.transform, new Vector3(0f, 0.24f, 0.02f), new Vector3(0.38f, 0.52f, 0.26f), _cloth, withCollider: false);
+            const float torsoY = 0.24f;
 
+            // 肩斜的收分躯干：上宽下窄 + 肩，别再用等宽方盒
+            Capsule("Torso", avatar.transform, new Vector3(0f, torsoY, 0f), new Vector3(0.46f, 0.30f, 0.30f), _cloth,
+                withCollider: false);
+            Sphere("ShoulderL", avatar.transform, new Vector3(-0.17f, torsoY + 0.13f, 0f), new Vector3(0.20f, 0.17f, 0.22f), _cloth, withCollider: false);
+            Sphere("ShoulderR", avatar.transform, new Vector3(0.17f, torsoY + 0.13f, 0f), new Vector3(0.20f, 0.17f, 0.22f), _cloth, withCollider: false);
+            Cylinder("Collar", avatar.transform, new Vector3(0f, torsoY + 0.20f, 0f), new Vector3(0.30f, 0.03f, 0.24f), _collar, withCollider: false);
+
+            // 大腿（第一人称视角偶尔能瞥见）与鞋
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Capsule("Thigh", avatar.transform, new Vector3(sx * 0.11f, torsoY - 0.22f, 0.14f), new Vector3(0.15f, 0.16f, 0.15f), _cloth,
+                    Quaternion.Euler(70f, 0f, 0f), withCollider: false);
+            }
+
+            // ---- 头 ----
             var head = new GameObject("Head").transform;
             head.SetParent(avatar.transform, false);
-            head.localPosition = new Vector3(0f, 0.62f, 0.02f);
-            Cylinder("Face", head, new Vector3(0f, 0f, 0.02f), new Vector3(0.24f, 0.12f, 0.24f), _skin, Quaternion.Euler(90f, 0f, 0f), withCollider: false);
-            Cylinder("Hair", head, new Vector3(0f, 0.03f, -0.03f), new Vector3(0.25f, 0.1f, 0.25f), _hair, Quaternion.Euler(90f, 0f, 0f), withCollider: false);
+            head.localPosition = new Vector3(0f, 0.60f, 0.01f);
 
-            // 两只前臂伸向方向盘（DriverAvatar 让它们跟着盘转）
-            var leftArm = new GameObject("ArmL").transform;
-            leftArm.SetParent(avatar.transform, false);
-            leftArm.localPosition = new Vector3(-0.1f, 0.3f, 0.3f);
-            leftArm.localRotation = Quaternion.Euler(-18f, 0f, 0f);
-            Box("ForearmL", leftArm, new Vector3(0f, 0f, 0.24f), new Vector3(0.1f, 0.1f, 0.5f), _cloth, withCollider: false);
-            Box("HandL", leftArm, new Vector3(0f, 0f, 0.48f), new Vector3(0.11f, 0.11f, 0.12f), _skin, withCollider: false);
+            // 颅骨：压扁的球（球体头部才像人；圆柱头会一直读作积木）
+            Sphere("Face", head, new Vector3(0f, 0f, 0.01f), new Vector3(0.20f, 0.23f, 0.21f), _skin, withCollider: false);
+            // 下颌收窄
+            Sphere("Jaw", head, new Vector3(0f, -0.075f, 0.03f), new Vector3(0.15f, 0.11f, 0.16f), _skin, withCollider: false);
+            Cylinder("Neck", head, new Vector3(0f, -0.135f, 0f), new Vector3(0.09f, 0.045f, 0.09f), _skin, withCollider: false);
 
-            var rightArm = new GameObject("ArmR").transform;
-            rightArm.SetParent(avatar.transform, false);
-            rightArm.localPosition = new Vector3(0.1f, 0.3f, 0.3f);
-            rightArm.localRotation = Quaternion.Euler(-18f, 0f, 0f);
-            Box("ForearmR", rightArm, new Vector3(0f, 0f, 0.24f), new Vector3(0.1f, 0.1f, 0.5f), _cloth, withCollider: false);
-            Box("HandR", rightArm, new Vector3(0f, 0f, 0.48f), new Vector3(0.11f, 0.11f, 0.12f), _skin, withCollider: false);
+            // ⚠️ 五官必须**凸出颅骨球面**，否则会被球"吞"进去 ——
+            // 第一版眼/鼻/嘴都放在球内部（颅骨最前缘 z≈0.115，而它们只到 ~0.10），
+            // 结果截图里脸一片空白、头就是个黑球。
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Sphere("EyeWhite", head, new Vector3(sx * 0.042f, 0.008f, 0.105f), new Vector3(0.046f, 0.034f, 0.032f), _eyeWhite, withCollider: false);
+                Sphere("Pupil", head, new Vector3(sx * 0.042f, 0.008f, 0.117f), new Vector3(0.020f, 0.020f, 0.016f), _pupil, withCollider: false);
+                Box("Brow", head, new Vector3(sx * 0.045f, 0.046f, 0.106f), new Vector3(0.044f, 0.009f, 0.014f), _brow, withCollider: false);
+            }
+            Sphere("NoseTip", head, new Vector3(0f, -0.014f, 0.112f), new Vector3(0.026f, 0.026f, 0.024f), _skin, withCollider: false);
+            Box("Mouth", head, new Vector3(0f, -0.055f, 0.108f), new Vector3(0.052f, 0.013f, 0.014f), _lip, withCollider: false);
+
+            // 头发做成"盖在后脑上"的壳：**前缘必须留在额头之后**（z<0.07），否则会把整张脸罩住
+            Sphere("Hair", head, new Vector3(0f, 0.062f, -0.038f), new Vector3(0.216f, 0.19f, 0.205f), _hair, withCollider: false);
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Sphere("HairSide", head, new Vector3(sx * 0.098f, 0.012f, -0.022f), new Vector3(0.05f, 0.20f, 0.18f), _hair, withCollider: false);
+                Sphere("HairTail", head, new Vector3(sx * 0.085f, -0.12f, -0.10f), new Vector3(0.07f, 0.12f, 0.09f), _hair, withCollider: false);
+            }
+
+            // ---- 双手伸向方向盘（DriverAvatar 让它们跟着盘转）----
+            var leftArm = BuildArm(avatar.transform, -0.13f);
+            var rightArm = BuildArm(avatar.transform, 0.13f);
 
             var driver = avatar.AddComponent<DriverAvatar>();
             driver.wheel = wheel;
             driver.head = head;
             driver.leftArm = leftArm;
             driver.rightArm = rightArm;
+        }
+
+        /// <summary>一条手臂：上臂（肩→肘）+ 前臂（肘→盘）+ 手。挂在 <c>ArmL/ArmR</c> 组下，由 DriverAvatar 驱动。</summary>
+        static Transform BuildArm(Transform parent, float x)
+        {
+            var arm = new GameObject(x < 0f ? "ArmL" : "ArmR").transform;
+            arm.SetParent(parent, false);
+            arm.localPosition = new Vector3(x, 0.30f, 0.16f);
+            arm.localRotation = Quaternion.Euler(-20f, 0f, x < 0f ? -6f : 6f);
+
+            // 上臂：从肩往前下方
+            Capsule("UpperArm", arm, new Vector3(0f, -0.03f, 0.11f), new Vector3(0.11f, 0.13f, 0.11f), _cloth,
+                Quaternion.Euler(72f, 0f, 0f), withCollider: false);
+            Sphere("Elbow", arm, new Vector3(0f, -0.01f, 0.24f), new Vector3(0.105f, 0.105f, 0.105f), _cloth, withCollider: false);
+
+            // 前臂：肘 → 方向盘
+            Capsule("Forearm", arm, new Vector3(0f, 0f, 0.36f), new Vector3(0.095f, 0.11f, 0.095f), _cloth,
+                Quaternion.Euler(86f, 0f, 0f), withCollider: false);
+            Sphere("Hand", arm, new Vector3(0f, 0.01f, 0.49f), new Vector3(0.115f, 0.095f, 0.13f), _skin, withCollider: false);
+
+            return arm;
         }
 
         /// <summary>
@@ -504,33 +572,85 @@ namespace Copilot.EditorTools
         {
             var bodyMat = MakeMaterial(color);
 
-            // 底盘 + 机舱盖 + 后备箱
-            Box("Chassis", root, new Vector3(0f, 0.62f, 0f), new Vector3(1.82f, 0.5f, 4.2f), bodyMat);
-            Box("Hood", root, new Vector3(0f, 0.92f, 1.35f), new Vector3(1.72f, 0.22f, 1.4f), bodyMat);
-            Box("Trunk", root, new Vector3(0f, 0.92f, -1.45f), new Vector3(1.72f, 0.22f, 1.1f), bodyMat);
+            // ⚠️ **碰撞体只留一个**（BodyLower）。其余全是视觉件，一律 withCollider:false ——
+            // 否则碰撞外形会跟着造型变化，连带改掉玩法层的撞车判定与「前方距离」测量。
+            Box("BodyLower", root, new Vector3(0f, 0.55f, 0f), new Vector3(1.80f, 0.44f, 4.15f), bodyMat);
+
+            // 腰线以上的上车身（略窄，做出收分）
+            Box("BodyUpper", root, new Vector3(0f, 0.93f, -0.05f), new Vector3(1.74f, 0.34f, 3.55f), bodyMat, withCollider: false);
+
+            // 前悬 / 车头：向车头收窄 + 保险杠下沿
+            Box("Nose", root, new Vector3(0f, 0.66f, 1.95f), new Vector3(1.66f, 0.30f, 0.60f), bodyMat, withCollider: false);
+            Box("FrontBumper", root, new Vector3(0f, 0.48f, 2.16f), new Vector3(1.78f, 0.30f, 0.24f), _bumper, withCollider: false);
+            Box("Grille", root, new Vector3(0f, 0.68f, 2.25f), new Vector3(1.05f, 0.18f, 0.06f), _grille, withCollider: false);
+
+            // 机舱盖（带一点前倾）与后备箱盖
+            Tilted("Hood", root, new Vector3(0f, 0.99f, 1.32f), new Vector3(1.62f, 0.13f, 1.55f), bodyMat, -3f);
+            Tilted("Trunk", root, new Vector3(0f, 0.99f, -1.45f), new Vector3(1.60f, 0.13f, 1.15f), bodyMat, 2.5f);
+
+            // 后悬 + 后保险杠
+            Box("Tail", root, new Vector3(0f, 0.68f, -1.98f), new Vector3(1.64f, 0.32f, 0.55f), bodyMat, withCollider: false);
+            Box("RearBumper", root, new Vector3(0f, 0.50f, -2.16f), new Vector3(1.76f, 0.30f, 0.24f), _bumper, withCollider: false);
+
+            // 轮拱（四个鼓包，让轮子"长在车身上"而不是贴在外面）
+            const float halfTrack = 0.85f;
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sz = -1; sz <= 1; sz += 2)
+                {
+                    Sphere("Fender", root, new Vector3(sx * (halfTrack - 0.16f), 0.60f, sz * 1.35f),
+                        new Vector3(0.62f, 0.42f, 0.86f), bodyMat, withCollider: false);
+                }
+            }
+
+            // 侧裙 / 门缝：一条深色腰线把车身"切开"，避免整块车漆糊成一片
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Box("SideSkirt", root, new Vector3(sx * 0.905f, 0.42f, 0.05f), new Vector3(0.03f, 0.16f, 3.2f), _bumper, withCollider: false);
+                Box("DoorSeam", root, new Vector3(sx * 0.912f, 0.80f, -0.15f), new Vector3(0.02f, 0.42f, 0.03f), _grille, withCollider: false);
+            }
 
             if (!openCabin)
             {
-                // 驾驶舱（略窄、偏后）
-                Box("Cabin", root, new Vector3(0f, 1.14f, -0.25f), new Vector3(1.6f, 0.56f, 2f), bodyMat);
+                // 整块驾驶舱（路边停车/危险车用；玩家的车由 CreateInterior 拼中空座舱）
+                Box("Cabin", root, new Vector3(0f, 1.18f, -0.30f), new Vector3(1.58f, 0.50f, 1.95f), bodyMat, withCollider: false);
 
-                // 玻璃：前风挡 / 后风挡 / 两侧窗
-                Box("Windshield", root, new Vector3(0f, 1.12f, 0.78f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
-                Box("RearGlass", root, new Vector3(0f, 1.12f, -1.28f), new Vector3(1.5f, 0.5f, 0.06f), _glass);
-                Box("SideGlassL", root, new Vector3(-0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
-                Box("SideGlassR", root, new Vector3(0.81f, 1.14f, -0.25f), new Vector3(0.04f, 0.42f, 1.7f), _glass);
+                // 玻璃都带倾角，不再是插在盒子上的平板
+                Tilted("Windshield", root, new Vector3(0f, 1.14f, 0.80f), new Vector3(1.46f, 0.52f, 0.05f), _glass, -24f);
+                Tilted("RearGlass", root, new Vector3(0f, 1.14f, -1.30f), new Vector3(1.44f, 0.46f, 0.05f), _glass, 20f);
+                for (int sx = -1; sx <= 1; sx += 2)
+                {
+                    Tilted("SideGlass", root, new Vector3(sx * 0.80f, 1.16f, 0.05f), new Vector3(0.04f, 0.40f, 1.55f), _glass, 0f);
+                    Box("APillar", root, new Vector3(sx * 0.80f, 1.14f, 0.92f), new Vector3(0.06f, 0.52f, 0.10f), bodyMat, withCollider: false);
+                    Box("CPillar", root, new Vector3(sx * 0.80f, 1.14f, -1.20f), new Vector3(0.06f, 0.48f, 0.12f), bodyMat, withCollider: false);
+                }
             }
 
-            // 灯
-            Box("HeadL", root, new Vector3(-0.62f, 0.78f, 2.08f), new Vector3(0.42f, 0.18f, 0.08f), _lightFront);
-            Box("HeadR", root, new Vector3(0.62f, 0.78f, 2.08f), new Vector3(0.42f, 0.18f, 0.08f), _lightFront);
-            Box("TailL", root, new Vector3(-0.6f, 0.82f, -2.08f), new Vector3(0.4f, 0.16f, 0.08f), _lightRear);
-            Box("TailR", root, new Vector3(0.6f, 0.82f, -2.08f), new Vector3(0.4f, 0.16f, 0.08f), _lightRear);
+            // 灯组：灯罩 + 发光件（前后各一对）
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Box("HeadHouse", root, new Vector3(sx * 0.62f, 0.80f, 2.16f), new Vector3(0.44f, 0.20f, 0.10f), _grille, withCollider: false);
+                Box(sx < 0 ? "HeadL" : "HeadR", root, new Vector3(sx * 0.62f, 0.80f, 2.22f), new Vector3(0.34f, 0.13f, 0.04f), _lightFront, withCollider: false);
+
+                Box("TailHouse", root, new Vector3(sx * 0.60f, 0.84f, -2.17f), new Vector3(0.42f, 0.18f, 0.09f), _grille, withCollider: false);
+                Box(sx < 0 ? "TailL" : "TailR", root, new Vector3(sx * 0.60f, 0.84f, -2.22f), new Vector3(0.32f, 0.12f, 0.04f), _lightRear, withCollider: false);
+            }
+
+            // 后视镜（杆 + 镜片）
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Cylinder("MirrorStalk", root, new Vector3(sx * 0.95f, 1.14f, 0.55f), new Vector3(0.05f, 0.10f, 0.05f), _bumper,
+                    Quaternion.Euler(0f, 0f, sx * 35f), withCollider: false);
+                Box(sx < 0 ? "MirrorL" : "MirrorR", root, new Vector3(sx * 1.06f, 1.16f, 0.52f), new Vector3(0.09f, 0.15f, 0.06f), _mirror, withCollider: false);
+            }
+
+            // 车牌
+            Box("PlateFront", root, new Vector3(0f, 0.58f, 2.29f), new Vector3(0.44f, 0.12f, 0.03f), _plate, withCollider: false);
+            Box("PlateRear", root, new Vector3(0f, 0.60f, -2.29f), new Vector3(0.44f, 0.12f, 0.03f), _plate, withCollider: false);
 
             if (!withWheels) return;
 
-            // 静态车轮（路边停车用；玩家车的轮子由 WheelCollider 管）
-            const float halfTrack = 0.85f;
+            // 静态车轮（路边停车 / 危险车用；玩家车的轮子由 WheelCollider 管）
             for (int sx = -1; sx <= 1; sx += 2)
             {
                 for (int sz = -1; sz <= 1; sz += 2)
@@ -540,6 +660,14 @@ namespace Copilot.EditorTools
             }
         }
 
+        /// <summary>带绕 X 轴倾角的盒子（风挡/机舱盖要用；<see cref="Box"/> 没有旋转参数）。</summary>
+        static GameObject Tilted(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat, float pitchDeg)
+        {
+            var go = Box(name, parent, localPos, scale, mat, withCollider: false);
+            go.transform.localRotation = Quaternion.Euler(pitchDeg, 0f, 0f);
+            return go;
+        }
+
         static void WheelVisual(Transform parent, Vector3 localPos, float radius)
         {
             var go = new GameObject("WheelVisual");
@@ -547,8 +675,7 @@ namespace Copilot.EditorTools
             go.transform.localPosition = localPos;
             go.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
 
-            Cylinder("Tire", go.transform, Vector3.zero, new Vector3(radius * 2f, 0.12f, radius * 2f), _tire);
-            Cylinder("Rim", go.transform, Vector3.zero, new Vector3(radius * 1.1f, 0.13f, radius * 1.1f), _rim);
+            BuildWheelMesh(go.transform, radius);
         }
 
         static WheelCollider AddWheel(Transform parent, string name, Vector3 localPos, float radius, out Transform mesh)
@@ -575,18 +702,40 @@ namespace Copilot.EditorTools
             collider.sidewaysFriction = sideways;
 
             // 可视轮挂在 WheelCollider 下，由 VehicleController 每帧按真实位姿同步
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            visual.name = "Mesh";
+            // （与静态车共用同一套轮网格：胎 + 轮辋 + 辐条 + 中心盖）
+            var visual = new GameObject("Mesh");
             visual.transform.SetParent(wheel.transform, false);
             visual.transform.localPosition = Vector3.zero;
-            // Unity 的 Cylinder 沿 Y 轴、高 2 单位；转 90° 让轴朝 X，再按半径/胎宽缩放
+            // Unity 的 Cylinder 沿 Y 轴；转 90° 让轮轴朝 X，子件再按半径缩放
             visual.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-            visual.transform.localScale = new Vector3(radius * 2f, 0.12f, radius * 2f);
-            visual.GetComponent<Renderer>().sharedMaterial = _tire;
-            UnityEngine.Object.DestroyImmediate(visual.GetComponent<Collider>()); // 轮子只靠 WheelCollider 物理
+            BuildWheelMesh(visual.transform, radius);
 
             mesh = visual.transform;
             return collider;
+        }
+
+        /// <summary>
+        /// 一套轮子的可视网格。**在已旋转 90° 的组里建**：组的局部 Y 就是轮轴。
+        /// 静态车（<see cref="WheelVisual"/>）与玩家车（<see cref="AddWheel"/>）共用它，
+        /// 否则两种车的轮子长得不一样。
+        /// </summary>
+        static void BuildWheelMesh(Transform wheelGroup, float radius)
+        {
+            Cylinder("Tire", wheelGroup, Vector3.zero, new Vector3(radius * 2f, 0.12f, radius * 2f), _tire, withCollider: false);
+            Cylinder("Rim", wheelGroup, Vector3.zero, new Vector3(radius * 0.62f, 0.14f, radius * 0.62f), _rim, withCollider: false);
+
+            // 辐条：绕轮轴（组的局部 Y）均布几根细条，让轮辋看起来是"轮辋"而不是白饼
+            const int spokes = 5;
+            for (int i = 0; i < spokes; i++)
+            {
+                var spoke = Box("Spoke", wheelGroup, Vector3.zero,
+                    new Vector3(0.055f, 0.15f, radius * 1.15f), _rim, withCollider: false);
+                spoke.transform.localRotation = Quaternion.Euler(0f, i * 360f / spokes, 0f);
+                spoke.transform.localPosition = Quaternion.Euler(0f, i * 360f / spokes, 0f)
+                    * new Vector3(0f, 0f, radius * 0.55f);
+            }
+
+            Cylinder("Hub", wheelGroup, Vector3.zero, new Vector3(radius * 0.26f, 0.17f, radius * 0.26f), _chrome, withCollider: false);
         }
 
         /// <summary>
@@ -649,6 +798,11 @@ namespace Copilot.EditorTools
 
             var tts = rig.AddComponent<TtsPlayer>();
             tts.connection = connection;
+
+            // 本地语音库：玩法事件（她慌了/松口气）要**出声**，不能只靠服务端回合
+            var localVoice = rig.AddComponent<LocalVoiceLib>();
+            runner.ttsPlayer = tts;
+            runner.localVoice = localVoice;
 
             var mic = rig.AddComponent<MicCapture>();
             mic.connection = connection;
@@ -722,9 +876,9 @@ namespace Copilot.EditorTools
                 new Vector2(0.15f, 1f), new Vector2(0.85f, 1f), new Vector2(0f, -150f), new Vector2(0f, -110f),
                 new Color(1f, 0.9f, 0.55f, 1f));
 
-            NewText("Hint", root, "按住空格说话 · Q/E 或按住鼠标右键扭头看学员", 20,
+            NewText("Hint", root, "按住空格说话 · Q/E 或按住鼠标右键扭头看学员 · Enter 结算 · R 重开一局", 20,
                 TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(30f, 30f), new Vector2(900f, 60f), new Color(1f, 1f, 1f, 0.6f));
+                new Vector2(30f, 30f), new Vector2(1100f, 60f), new Color(1f, 1f, 1f, 0.6f));
 
             // 教学关：当前步骤 + 结果播报（科目一 · 上车第一课）
             var stepLabel = NewText("StepLabel", root, "", 24, TextAnchor.UpperLeft,
@@ -870,6 +1024,8 @@ namespace Copilot.EditorTools
             gameplayHud.settlementStars = settleStars;
             gameplayHud.settlementItems = settleItems;
 
+            if (runner != null) runner.gameplayHud = gameplayHud;
+
             // 装配方也要拿到玩法 HUD（同 bootstrap.bubble 的回填理由）
             var bootstrapForHud = rig.GetComponent<CopilotBootstrap>();
             if (bootstrapForHud != null) bootstrapForHud.gameplayHud = gameplayHud;
@@ -906,6 +1062,38 @@ namespace Copilot.EditorTools
             Quaternion? localRotation = null, bool withCollider = true)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = scale;
+            if (localRotation.HasValue) go.transform.localRotation = localRotation.Value;
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            if (!withCollider) UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+            return go;
+        }
+
+        static GameObject Sphere(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat,
+            Quaternion? localRotation = null, bool withCollider = true)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = scale;
+            if (localRotation.HasValue) go.transform.localRotation = localRotation.Value;
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            if (!withCollider) UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+            return go;
+        }
+
+        /// <summary>
+        /// 胶囊（Unity 的 Capsule 高 2 单位、沿 Y 轴）。
+        /// 有它才能做出"像人"的肢体 —— 方盒手臂无论怎么摆都读作积木。
+        /// </summary>
+        static GameObject Capsule(string name, Transform parent, Vector3 localPos, Vector3 scale, Material mat,
+            Quaternion? localRotation = null, bool withCollider = true)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = name;
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPos;
@@ -1020,6 +1208,51 @@ namespace Copilot.EditorTools
             Requires(FindInScene<SteeringWheel>(scene) != null, "场景里没有方向盘", problems);
             Requires(FindInScene<DriverAvatar>(scene) != null, "驾驶位上没有学员模型", problems);
 
+            // ---- 学员的五官/身体（P 轮的"高细节"必须真的生成了，别退回一堆方块）----
+            Requires(CountInScene(scene, "Head") >= 1, "学员没有头", problems);
+            Requires(CountInScene(scene, "Face") >= 1, "学员没有脸（球体颅骨）", problems);
+            Requires(CountInScene(scene, "Hair") >= 1, "学员没有头发", problems);
+            Requires(CountInScene(scene, "EyeWhite") >= 2, "学员没有眼睛", problems);
+            Requires(CountInScene(scene, "Pupil") >= 2, "学员没有瞳孔", problems);
+            Requires(CountInScene(scene, "Mouth") >= 1, "学员没有嘴", problems);
+            Requires(CountInScene(scene, "Neck") >= 1, "学员没有脖子", problems);
+            Requires(CountInScene(scene, "Torso") >= 1, "学员没有躯干", problems);
+            Requires(CountInScene(scene, "Elbow") >= 2 && CountInScene(scene, "Forearm") >= 2,
+                "学员的手臂没有肘/前臂（不是人形）", problems);
+            Requires(CountInScene(scene, "Hand") >= 2, "学员没有手", problems);
+            Requires(CountInScene(scene, "Brow") >= 2, "学员没有眉毛", problems);
+
+            // ---- 车身高细节件 ----
+            Requires(CountInScene(scene, "Nose") >= 1, "车身没有车头前悬", problems);
+            Requires(CountInScene(scene, "Grille") >= 1, "车身没有格栅", problems);
+            Requires(CountInScene(scene, "FrontBumper") >= 1 && CountInScene(scene, "RearBumper") >= 1,
+                "车身没有前后保险杠", problems);
+            Requires(CountInScene(scene, "HeadL") >= 1 && CountInScene(scene, "HeadR") >= 1,
+                "车头灯不齐", problems);
+            Requires(CountInScene(scene, "TailL") >= 1 && CountInScene(scene, "TailR") >= 1,
+                "车尾灯不齐", problems);
+            Requires(CountInScene(scene, "MirrorL") >= 1 && CountInScene(scene, "MirrorR") >= 1,
+                "车身没有后视镜", problems);
+            Requires(CountInScene(scene, "PlateFront") >= 1 && CountInScene(scene, "PlateRear") >= 1,
+                "车身没有车牌", problems);
+            // 辐条：至少一台车的四个轮子（4 轮 × 5 辐条）
+            Requires(CountInScene(scene, "Spoke") >= 20, "轮辋没有辐条（还是白饼轮）", problems);
+            Requires(CountInScene(scene, "Fender") >= 4, "车身没有轮拱", problems);
+
+            // 车的整体尺寸要在合理区间（造型改坏了最常见的样子就是"塌成一堆"）
+            var carBounds = ChildRendererBounds(vehicle != null ? vehicle.gameObject : null);
+            if (carBounds.HasValue)
+            {
+                var size = carBounds.Value.size;
+                Requires(size.z > 3.5f && size.z < 5.5f, $"车长不合理：{size.z:0.0}m", problems);
+                Requires(size.y > 1.2f && size.y < 2.4f, $"车高不合理：{size.y:0.0}m", problems);
+                Requires(size.x > 1.5f && size.x < 2.6f, $"车宽不合理：{size.x:0.0}m", problems);
+            }
+            else
+            {
+                Requires(false, "拿不到车体包围盒（车上一个 Renderer 都没有？）", problems);
+            }
+
             var driveHud = FindInScene<DriveHud>(scene);
             Requires(driveHud != null, "场景里没有驾驶仪表 DriveHud（车速/转角看不见就没法及时干预）", problems);
             if (driveHud != null)
@@ -1117,18 +1350,35 @@ namespace Copilot.EditorTools
             float restYaw = cockpit != null ? cockpit.restYaw : 0f;
 
             // 玩法 UI 平时是隐藏的（横幅要等失误、结算面板要等关卡结束），预览图里就看不见 ——
-            // 而排版问题**只有看图才能发现**。所以在这里临时点亮：第一张放横幅+分数（不挡视野），
-            // 第二张放结算面板（它挡住视野，正好在"扭头"那张里检查排版），渲完还原。
+            // 而排版问题**只有看图才能发现**。所以临时点亮再还原。
+            // ⚠️ 三张图**各管一件事**：把结算面板也塞进"扭头看学员"那张的话，它会把人挡住，
+            //    结果学员的模型反而没法检查（第一版就是这么踩的）。
             var gameplayHud = FindInScene<GameplayHud>(scene);
             ShowcaseBanner(gameplayHud, true);
             var forward = CaptureView(cam, Quaternion.Euler(0f, restYaw, 0f), PreviewRelativePath);
             ShowcaseBanner(gameplayHud, false);
 
+            // 扭头看学员：**不放面板**，专门检查人形建模（-70° 才把她摆到画面中间附近）
+            // 编辑模式她只会朝前坐，相机只能看到侧脸 —— 临时把她的头扭向副驾（运行时她说话时就是这样），
+            // 否则「五官到底建出来没有」这件事**看不出来**。
+            ShowcaseDriverFace(scene, true);
+            CaptureView(cam, Quaternion.Euler(0f, -70f, 0f), DriverPreviewRelativePath);
+            ShowcaseDriverFace(scene, false);
+
+            // 结算面板：单独一张，专门检查排版
             ShowcaseSettlement(gameplayHud, true);
-            CaptureView(cam, Quaternion.Euler(0f, -58f, 0f), DriverPreviewRelativePath);
+            CaptureView(cam, Quaternion.Euler(0f, restYaw, 0f), SettlePreviewRelativePath);
             ShowcaseSettlement(gameplayHud, false);
 
             return forward;
+        }
+
+        /// <summary>预览图专用：把学员的头扭向副驾（运行时她说话时就是这样），好让人看清五官。</summary>
+        static void ShowcaseDriverFace(Scene scene, bool on)
+        {
+            var avatar = FindInScene<DriverAvatar>(scene);
+            if (avatar == null || avatar.head == null) return;
+            avatar.head.localRotation = on ? Quaternion.Euler(0f, 58f, 0f) : Quaternion.identity;
         }
 
         /// <summary>预览图专用：临时点亮/还原「警告横幅 + 实时分数」。</summary>
@@ -1261,6 +1511,19 @@ namespace Copilot.EditorTools
                 count += CountNamed(t.GetChild(i), name);
             }
             return count;
+        }
+
+        /// <summary>把物体及其所有子物体的 Renderer 包围盒并起来（断言车的整体尺寸用）。</summary>
+        static Bounds? ChildRendererBounds(GameObject go)
+        {
+            if (go == null) return null;
+
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return null;
+
+            var bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            return bounds;
         }
 
         static void Requires(bool condition, string message, StringBuilder problems)

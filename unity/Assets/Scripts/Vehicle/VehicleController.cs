@@ -33,6 +33,8 @@ namespace Copilot.Vehicle
         float _steer;
         float _throttle;
         float _brake;
+        Vector3 _startPosition;
+        Quaternion _startRotation;
 
         public float CurrentSteer
         {
@@ -76,6 +78,22 @@ namespace Copilot.Vehicle
             {
                 _body.centerOfMass = new Vector3(0f, -0.35f, 0f);
             }
+
+            // 记下起始位姿，供重开一局时归位
+            _startPosition = transform.position;
+            _startRotation = transform.rotation;
+        }
+
+        /// <summary>
+        /// 重开一局：车归位并把速度清零 —— 否则会带着上一局的惯性冲出去。
+        /// </summary>
+        public void ResetToStart()
+        {
+            ClearInput();
+            transform.SetPositionAndRotation(_startPosition, _startRotation);
+            if (_body == null) return;
+            _body.velocity = Vector3.zero;
+            _body.angularVelocity = Vector3.zero;
         }
 
         /// <summary>ActionExecutor 每 FixedUpdate 调用一次。<paramref name="throttle"/> 为负表示**倒车**。</summary>

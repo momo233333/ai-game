@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using Copilot.Core;
 using Copilot.Core.Gameplay;
+using Copilot.Core.Levels;
 using Xunit;
 
 namespace Copilot.Tests;
@@ -331,6 +335,23 @@ public class MistakeDirectorTests
         Assert.False(d.Tick(100f, Ctx()).Opened);
         Assert.True(d.IsScriptFinished);
     }
+
+    [Fact]
+    public void 重置后剧本能从头再演一遍()
+    {
+        var d = Director(Def(windowMs: 1000f));
+        d.Tick(100f, Ctx());
+        d.Tick(3000f, Ctx());                       // 超时结案（顺带进入 8s 冷却）
+        Assert.Equal(1, d.FiredCount);
+
+        d.Reset();
+
+        Assert.Equal(0, d.FiredCount);
+        Assert.Equal(MistakePhase.Idle, d.Phase);
+        Assert.Null(d.LastOutcome);
+        Assert.Null(d.Current);
+        Assert.True(d.Tick(100f, Ctx()).Opened);    // 冷却与队首指针都清了 → 立刻能再演
+    }
 }
 
 /// <summary>科目一剧本内容本身的合理性（防将来改数值改出事故）。</summary>
@@ -385,6 +406,84 @@ public class MistakeCatalogTests
             Assert.Contains(def.WrongAction.Intent, Intents.All);
         }
     }
+
+    // ---- 语音提示：id 与字幕文本必须一致 ----
+    // 这条防的是"看到的和听到的不是同一句"（H 阶段踩过）。语音库 id 一旦和文本脱节，
+    // 游戏里就会出现"字幕写 A、喇叭念 B"，而且**没有任何报错**。
+
+    [Fact]
+    public void 每个语音提示的id与字幕文本必须一致()
+    {
+        var corpus = LoadCorpus();
+
+        foreach (var def in MistakeCatalog.Subject1Tutorial)
+        {
+            AssertCue(def.Id + " 开演", def.Panic, corpus);
+            AssertCue(def.Id + " 救回", def.Saved, corpus);
+            AssertCue(def.Id + " 失手", def.Failed, corpus);
+        }
+    }
+
+    [Fact]
+    public void 玩法专用台词用GAMEPLAY标签_不会混进意图兜底池()
+    {
+        // 用真意图做标签的话，TtsRouter 的"按意图兜底"会在普通指令上念出她的慌乱台词
+        var corpus = LoadCorpus();
+        var gameplayIds = new List<string>();
+        foreach (var def in MistakeCatalog.Subject1Tutorial)
+        {
+            gameplayIds.Add(def.Panic.Id);
+            gameplayIds.Add(def.Saved.Id);
+            gameplayIds.Add(def.Failed.Id);
+        }
+
+        foreach (var id in gameplayIds)
+        {
+            var line = ReadCorpusLine(id);
+            Assert.NotNull(line);
+            var tags = line!.Value.Tags;
+            foreach (var intent in Intents.All)
+            {
+                Assert.DoesNotContain(intent, tags);   // 不能挂任何真意图
+            }
+        }
+    }
+
+    static void AssertCue(string who, VoiceCue cue, IReadOnlyDictionary<string, string> corpus)
+    {
+        Assert.True(cue.HasVoice, who + " 没配语音 id");
+        Assert.True(corpus.ContainsKey(cue.Id), who + " 的 id「" + cue.Id + "」不在 lines.csv 里");
+        Assert.Equal(corpus[cue.Id], cue.Text);        // ★ 听到的必须等于看到的
+    }
+
+    /// <summary>读 lines.csv 的 id → text（与 <c>Cli.ReadCorpus</c> 同一约定：台词里不含 ASCII 逗号）。</summary>
+    static IReadOnlyDictionary<string, string> LoadCorpus()
+    {
+        var map = new Dictionary<string, string>();
+        foreach (var line in File.ReadAllLines(CorpusPath, Encoding.UTF8))
+        {
+            if (line.Length == 0 || line.StartsWith("id,", StringComparison.OrdinalIgnoreCase)) continue;
+            var parts = line.Split(',');
+            if (parts.Length < 2) continue;
+            map[parts[0].Trim()] = parts[1].Trim();
+        }
+        Assert.NotEmpty(map);
+        return map;
+    }
+
+    static (string Text, string[] Tags)? ReadCorpusLine(string id)
+    {
+        foreach (var line in File.ReadAllLines(CorpusPath, Encoding.UTF8))
+        {
+            var parts = line.Split(',');
+            if (parts.Length < 4 || !string.Equals(parts[0].Trim(), id, StringComparison.Ordinal)) continue;
+            var tags = parts[3].Trim().Split('|');
+            return (parts[1].Trim(), tags);
+        }
+        return null;
+    }
+
+    static string CorpusPath => Path.Combine(TestPaths.RepoRoot, "voice-corpus", "lines.csv");
 }
 
 /// <summary>结算计分（三条指标 + 星级边界）。</summary>
@@ -552,5 +651,49 @@ public class LevelSessionTests
         Assert.Contains(r.Items, i => i.Label == "及时干预");
         Assert.Contains(r.Items, i => i.Label == "教学步");
         Assert.Contains(r.Items, i => i.Label == "最终信任" && i.Value == 52f);
+    }
+
+    [Fact]
+    public void 重置后计数清零信任回初始值_关卡标识保留()
+    {
+        var s = new LevelSession("subject1_tutorial", 6);
+        s.ObserveStepAdvance(5);
+        s.ObserveMistake(Saved());
+        s.ObserveMistake(Failed());
+        s.ObserveLocalEvent("collision");
+        s.ObserveLocalEvent("lane_departure");
+        s.SetTrust(12f);
+
+        s.Reset();
+
+        Assert.Equal(0, s.StepsCompleted);
+        Assert.Equal(0, s.Saves);
+        Assert.Equal(0, s.Misses);
+        Assert.Equal(0, s.Collisions);
+        Assert.Equal(0, s.LaneDepartures);
+        Assert.Equal(TrustState.InitialTrust, s.FinalTrust, 3);
+        Assert.Equal("subject1_tutorial", s.LevelId);
+        Assert.Equal(6, s.TotalSteps);
+    }
+}
+
+/// <summary>重开一局：教学进度复位。</summary>
+public class TutorialProgressResetTests
+{
+    [Fact]
+    public void 重置后回到第一步()
+    {
+        var p = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 3; i++)
+        {
+            p.Observe(LevelCatalog.Subject1Tutorial.Steps[i].AcceptIntents[0]);
+        }
+        Assert.Equal(3, p.StepIndex);
+
+        p.Reset();
+
+        Assert.Equal(0, p.StepIndex);
+        Assert.False(p.IsCompleted);
+        Assert.Equal("起步", p.Current!.Title);
     }
 }

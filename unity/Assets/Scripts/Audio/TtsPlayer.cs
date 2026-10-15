@@ -113,6 +113,32 @@ namespace Copilot.Audio
             if (LineStarted != null) LineStarted(evt.Text);
         }
 
+        /// <summary>
+        /// 播放一段**本地**音频（不经 AI 服务端）：语音库的预生成台词走这条路，
+        /// 玩法事件（她偏出车道了 / 救回来了）因此也能出声。
+        /// 复用与 <c>tts_audio</c> 完全相同的队列与播放/回调逻辑，只是来源不同。
+        /// </summary>
+        public bool PlayLocal(byte[] pcm16, int sampleRate, string text)
+        {
+            if (pcm16 == null || pcm16.Length == 0) return false;
+
+            float[] samples = AudioUtil.ToFloat(pcm16);
+            if (samples.Length == 0) return false;
+
+            lock (_pending)
+            {
+                _pending.Enqueue(new Line
+                {
+                    Samples = samples,
+                    SampleRate = sampleRate > 0 ? sampleRate : 24000,
+                    Text = text,
+                });
+            }
+
+            if (LineStarted != null) LineStarted(text);
+            return true;
+        }
+
         void Update()
         {
             if (_playing) return;

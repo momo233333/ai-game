@@ -40,6 +40,7 @@ namespace Copilot
         public VehicleSensors sensors;
         public MistakeRunner mistakeRunner;
         public GameplayHud gameplayHud;
+        public LocalVoiceLib localVoice;
 
         void Awake()
         {
@@ -104,11 +105,18 @@ namespace Copilot
             mistakeRunner.sensors = sensors;
             mistakeRunner.tutorial = GetComponent<TutorialDirector>();
             mistakeRunner.bubble = bubble;
+            mistakeRunner.ttsPlayer = ttsPlayer;
+
+            // 本地语音库：玩法事件要有声音（拿不到语音库就自动降级为纯字幕）
+            if (localVoice == null) localVoice = GetComponent<LocalVoiceLib>();
+            if (localVoice == null) localVoice = gameObject.AddComponent<LocalVoiceLib>();
+            mistakeRunner.localVoice = localVoice;
 
             if (gameplayHud == null) gameplayHud = GetComponent<GameplayHud>();
             if (gameplayHud == null) gameplayHud = gameObject.AddComponent<GameplayHud>();
             gameplayHud.runner = mistakeRunner;
             gameplayHud.tutorial = mistakeRunner.tutorial;
+            mistakeRunner.gameplayHud = gameplayHud;
 
             connection.Connected += () => Debug.Log("[Copilot] 已连接 AI 服务 " + connection.Endpoint);
             connection.Disconnected += reason => Debug.LogWarning("[Copilot] 断开: " + reason);
