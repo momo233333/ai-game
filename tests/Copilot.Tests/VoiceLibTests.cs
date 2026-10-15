@@ -1,3 +1,5 @@
+using System;
+using System.Buffers.Binary;
 using Copilot.Core;
 using Xunit;
 
@@ -149,6 +151,106 @@ public class WavReaderTests
         for (int i = 0; i < original.Length; i++)
         {
             Assert.Equal(original[i], roundTrip[i], 3);
+        }
+    }
+
+    // ---- 44.1k→24k 这条非整数倍率重采样（melo-tts 的原生输出，实测「一段一段」投诉的正主）----
+
+    static byte[] Sine(float freq, float seconds, int rate, float amplitude = 0.5f)
+    {
+        int frames = (int)(rate * seconds);
+        var pcm = new byte[frames * 2];
+        for (int i = 0; i < frames; i++)
+        {
+            short s = (short)Math.Round(amplitude * Math.Sin(2 * Math.PI * freq * i / rate) * 32767);
+            BinaryPrimitives.WriteInt16LittleEndian(pcm.AsSpan(i * 2, 2), s);
+        }
+        return pcm;
+    }
+
+    static double Rms(byte[] pcm, int fromFrame, int toFrame)
+    {
+        double sum = 0; int n = 0;
+        for (int i = fromFrame; i < toFrame; i++)
+        {
+            double v = BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(i * 2, 2)) / 32768.0;
+            sum += v * v; n++;
+        }
+        return n == 0 ? 0 : Math.Sqrt(sum / n);
+    }
+
+    [Fact]
+    public void 降采样后正弦幅度平稳_没有周期性起伏()
+    {
+        // 回归（实测投诉「声音一段一段的」）：44.1k→24k 是非整数倍率 147/80，
+        // 早先「按输出点取输入窗口平均」的实现会让窗口在 2/3 样本间跳变 → 逐点变化的平滑器 → 包络周期性起伏。
+        // 6kHz 仍在 12kHz 奈奎斯特以内，降采样后幅度必须基本不变（旧实现下起伏约 18%）。
+        var src = Sine(6000f, 0.5f, 44100, 0.5f);
+        var dst = AudioUtil.Resample16(src, 44100, 24000);
+
+        int block = 24000 / 200;   // 5ms
+        int frames = dst.Length / 2;
+        double min = double.MaxValue, max = 0;
+        for (int start = 1200; start + block <= frames - 1200; start += block)   // 跳过首尾
+        {
+            double r = Rms(dst, start, start + block);
+            if (r < min) min = r;
+            if (r > max) max = r;
+        }
+
+        Assert.True(max / Math.Max(min, 1e-9) < 1.12,
+            $"降采样后出现周期性起伏：min={min:0.0000} max={max:0.0000}");
+    }
+
+    [Fact]
+    public void 降采样滤掉高于目标奈奎斯特的频率()
+    {
+        // 15kHz 在 24kHz 的奈奎斯特（12kHz）之外，抗混叠低通必须把它压掉，
+        // 否则会折叠成 9kHz 的噪声（听感是"沙沙"的金属音）。
+        var high = AudioUtil.Resample16(Sine(15000f, 0.5f, 44100, 0.5f), 44100, 24000);
+        var low = AudioUtil.Resample16(Sine(1000f, 0.5f, 44100, 0.5f), 44100, 24000);
+
+        double rmsHigh = Rms(high, 2000, high.Length / 2 - 2000);
+        double rmsLow = Rms(low, 2000, low.Length / 2 - 2000);
+
+        Assert.True(rmsHigh < rmsLow * 0.2,
+            $"15kHz 没有被压掉：high={rmsHigh:0.0000} low={rmsLow:0.0000}");
+    }
+
+    [Fact]
+    public void 峰值归一化_把偏轻的音频拉到目标峰值()
+    {
+        // melo-tts 原生输出峰值只有满量程的 0.3–0.5 → 实测「声音很小」
+        var quiet = Sine(440f, 0.2f, 24000, 0.35f);
+        var loud = AudioUtil.NormalizePeak16(quiet, 0.9f);
+
+        int peak = 0;
+        for (int i = 0; i < loud.Length / 2; i++)
+        {
+            int s = BinaryPrimitives.ReadInt16LittleEndian(loud.AsSpan(i * 2, 2));
+            if (Math.Abs(s) > peak) peak = Math.Abs(s);
+        }
+
+        Assert.InRange(peak, (int)(0.9 * 32767 * 0.97), (int)(0.9 * 32767 * 1.01));
+    }
+
+    [Fact]
+    public void 峰值归一化_全静音原样返回()
+    {
+        var silence = new byte[200];
+        Assert.Same(silence, AudioUtil.NormalizePeak16(silence));
+    }
+
+    [Fact]
+    public void 峰值归一化_不会越界溢出()
+    {
+        var loud = Sine(440f, 0.1f, 24000, 0.95f);
+        var normalized = AudioUtil.NormalizePeak16(loud, 0.9f);
+
+        for (int i = 0; i < normalized.Length / 2; i++)
+        {
+            int s = BinaryPrimitives.ReadInt16LittleEndian(normalized.AsSpan(i * 2, 2));
+            Assert.InRange(s, short.MinValue, short.MaxValue);
         }
     }
 }

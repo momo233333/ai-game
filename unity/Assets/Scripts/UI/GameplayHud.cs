@@ -145,7 +145,10 @@ namespace Copilot.UI
                 scoreLabel.text = string.Empty;
                 return;
             }
-            scoreLabel.text = "本局评分 " + runner.Session.LiveScore();
+
+            // 主动犯错关掉时没有"干预分"可言，实时总分是不完整的 → 干脆不显示，免得误导
+            // （显示成满分会让人以为白送 40 分；显示成 0 分又像被扣了，两头都不对）。
+            scoreLabel.text = runner.MistakesEnabled ? "本局评分 " + runner.Session.LiveScore() : string.Empty;
         }
 
         void UpdateSettlement()
@@ -222,23 +225,36 @@ namespace Copilot.UI
             _settled = true;
 
             var report = runner.EndLevel();
+            bool mistakesOn = runner.MistakesEnabled;
             SetBannerVisible(false);
 
             if (settlementPanel != null) settlementPanel.SetActive(true);
             if (settlementTitle != null) settlementTitle.text = "教学关结算";
-            if (settlementStars != null) settlementStars.text = StarText(report.Stars);
+            if (settlementStars != null)
+            {
+                // 星级是按 100 分制（安全 40 + 干预 40 + 教学 20）定的；没开主动犯错就没有这套满配，不评星。
+                settlementStars.text = mistakesOn ? StarText(report.Stars) : string.Empty;
+            }
             if (settlementStats != null)
             {
-                settlementStats.text =
-                    "安全  " + report.SafetyPoints + " / 40\n" +
-                    "及时干预  " + report.InterventionPoints + " / 40\n" +
-                    "教学完成  " + report.TutorialPoints + " / 20\n" +
-                    "总分  " + report.Score + " / 100";
+                settlementStats.text = mistakesOn
+                    ? "安全  " + report.SafetyPoints + " / 40\n"
+                      + "及时干预  " + report.InterventionPoints + " / 40\n"
+                      + "教学完成  " + report.TutorialPoints + " / 20\n"
+                      + "总分  " + report.Score + " / 100"
+                    : "安全  " + report.SafetyPoints + " / 40\n"
+                      + "教学完成  " + report.TutorialPoints + " / 20\n"
+                      + "总分  " + (report.SafetyPoints + report.TutorialPoints) + " / 60\n"
+                      + "（主动犯错未启用，本关不计干预分）";
             }
-            if (settlementItems != null) settlementItems.text = FormatItems(report, runner.Session.TotalSteps);
+            if (settlementItems != null)
+            {
+                settlementItems.text = FormatItems(report, runner.Session.TotalSteps, mistakesOn);
+            }
 
-            Debug.Log(string.Format("[Gameplay] 结算 总分={0} 星级={1}（安全{2} 干预{3} 教学{4}）",
-                report.Score, report.Stars, report.SafetyPoints, report.InterventionPoints, report.TutorialPoints));
+            Debug.Log(string.Format("[Gameplay] 结算 总分={0} 星级={1}（安全{2} 干预{3} 教学{4}）· 主动犯错={5}",
+                report.Score, report.Stars, report.SafetyPoints, report.InterventionPoints,
+                report.TutorialPoints, mistakesOn ? "开" : "关"));
         }
 
         static string StarText(int stars)
@@ -248,12 +264,20 @@ namespace Copilot.UI
             return sb.ToString();
         }
 
-        static string FormatItems(SettlementReport report, int totalSteps)
+        static string FormatItems(SettlementReport report, int totalSteps, bool includeIntervention)
         {
             var sb = new StringBuilder();
+            bool first = true;
             for (int i = 0; i < report.Items.Count; i++)
             {
                 var item = report.Items[i];
+
+                // 主动犯错关掉时，"及时干预/漏掉的失误"这两行永远没有数据（分母为 0），不该出现在面板上
+                if (!includeIntervention && (item.Label == "及时干预" || item.Label == "漏掉的失误")) continue;
+
+                if (!first) sb.Append('\n');
+                first = false;
+
                 sb.Append(item.Label);
                 sb.Append("：");
 
@@ -275,8 +299,6 @@ namespace Copilot.UI
                     sb.Append(item.Points);
                     sb.Append("）");
                 }
-
-                if (i < report.Items.Count - 1) sb.Append('\n');
             }
             return sb.ToString();
         }

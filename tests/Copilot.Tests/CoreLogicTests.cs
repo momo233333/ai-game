@@ -49,9 +49,46 @@ public class ActionLimitsTests
     [InlineData("变道", 0)]
     [InlineData("打方向盘", 0)]
     [InlineData("先往左再往右", 1)]
+    // 玩家口语变体（实测反馈「说往左她往右」后补的一批，防止方向抽取漏词）
+    [InlineData("往左开", -1)]
+    [InlineData("靠左一点", -1)]
+    [InlineData("左边转", -1)]
+    [InlineData("往右边靠", 1)]
+    [InlineData("右边拐", 1)]
+    [InlineData("往右开", 1)]
     public void 从原话抽方向(string text, int expected)
     {
         Assert.Equal(expected, Intents.ParseDirection(text));
+    }
+
+    [Fact]
+    public void 转向符号约定_负值是左_正值是右()
+    {
+        // 这条约定是全链路的底：Core 的 Canonical 给负数 = 左，Unity 的 WheelCollider.steerAngle 负数也 = 左。
+        // 谁把符号翻过来，就会重新出现「说往左她往右」。
+        Assert.True(ActionLimits.Canonical(Intents.TurnLeft).Steering < 0f, "TURN_LEFT 必须是负转向");
+        Assert.True(ActionLimits.Canonical(Intents.TurnRight).Steering > 0f, "TURN_RIGHT 必须是正转向");
+    }
+
+    [Theory]
+    [InlineData("向左变道", -1)]
+    [InlineData("往左开", -1)]
+    [InlineData("左前方行驶", -1)]
+    [InlineData("靠左一点", -1)]
+    [InlineData("向右变道", 1)]
+    [InlineData("往右开", 1)]
+    [InlineData("右前方行驶", 1)]
+    [InlineData("往右边靠", 1)]
+    public void 方向矫正_中立意图按原话给对左右(string text, int expectedSign)
+    {
+        // 回归：LANE_CHANGE 本身不带方向，Canonical 的默认值是 +0.3（右）。
+        // 方向只能由代码从原话抽 —— 这条一旦断了，「向左变道」就会往右偏。
+        var lane = ActionLimits.Guard(new DriveAction { Intent = Intents.LaneChange }, new GameStateSnapshot()).Action;
+
+        ActionLimits.ApplyDirection(lane, Intents.ParseDirection(text));
+
+        if (expectedSign < 0) Assert.True(lane.Steering < 0f, text + " 必须给负转向（左）");
+        else Assert.True(lane.Steering > 0f, text + " 必须给正转向（右）");
     }
 
     [Fact]

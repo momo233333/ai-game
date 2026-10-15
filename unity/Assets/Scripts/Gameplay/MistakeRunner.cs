@@ -43,6 +43,11 @@ namespace Copilot.Gameplay
         [Tooltip("播放本地语音用的播放器（与妹妹说话同一条队列）")]
         public TtsPlayer ttsPlayer;
 
+        [Header("主动犯错（第一阶段先关掉，只练基础驾驶）")]
+        [Tooltip("关掉后小雅**不主动犯错**，只老老实实执行你说的指令；打开才演剧本失误（偏出车道/忘了刹车）。\n"
+                 + "默认关闭：实测开着时，玩家刚教完左转她就往右飘，会被当成「说往左她往右、根本不听话」。")]
+        public bool mistakesEnabled = false;
+
         [Header("剧本")]
         [Tooltip("两次失误之间至少隔这么久（秒）")]
         public float cooldownSeconds = 8f;
@@ -71,6 +76,12 @@ namespace Copilot.Gameplay
 
         CopilotConnection _boundConnection;
         VehicleSensors _boundSensors;
+
+        /// <summary>主动犯错是否开着（HUD 据此决定要不要显示「干预分」那一行）。</summary>
+        public bool MistakesEnabled
+        {
+            get { return mistakesEnabled; }
+        }
 
         public MistakePhase Phase
         {
@@ -206,6 +217,10 @@ namespace Copilot.Gameplay
         public MistakeTick Advance(float dtMs, MistakeContext ctx)
         {
             EnsureInitialized();
+
+            // 主动犯错关掉时，剧本**不推进**（教学进度照常由 Update 观测）。
+            // 这样小雅只执行玩家说的指令 —— 第一阶段要的是「说左就左、说倒车就倒车」能对上。
+            if (!mistakesEnabled) return default;
 
             var tick = _director.Tick(dtMs, ctx);
 

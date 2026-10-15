@@ -19,9 +19,10 @@ namespace Copilot.EditorTools
     /// 为什么必须有这个：`SceneBuilder.Validate` 只能证明"引用连上了"，Core 单测只能证明"规则对了"
     /// —— 两者都覆盖不到「Unity 这一层真的把失误注入给车、把玩家干预对上窗口、结算出正确的分」。
     ///
-    /// 做法：**编辑模式下用 `AddComponent` 造一套组件**（`AddComponent` 会立即触发 `Awake`，
-    /// 而场景里已有的物体在编辑模式**不会**跑 `Awake`/`Update`，这也是为什么不能直接读现有场景）。
+    /// 做法：**编辑模式下用 `AddComponent` 造一套组件**（注意：`AddComponent` **不保证**触发 `Awake`，
+    /// 所以 `MistakeRunner` / `TutorialDirector` 都做了懒初始化，字段注入后 `Rebind()` 才算连上），
     /// 然后手动喂合成上下文推进 —— 靠 `MistakeRunner.Advance` / `SubmitPlayerIntent` 两个公开接缝。
+    /// 因为线上默认**关掉了主动犯错**（`mistakesEnabled=false`），自检里必须显式打开才验得了结算。
     ///
     /// 用法：
     /// ① 批处理：`powershell -File tools\unity_batch.ps1 -Method Copilot.EditorTools.GameplaySelfTest.RunAndExit`
@@ -92,6 +93,7 @@ namespace Copilot.EditorTools
                 runner.vehicle = vehicle;
                 runner.sensors = sensors;
                 runner.tutorial = tutorial;
+                runner.mistakesEnabled = true;   // 线上默认关；自检要验失误剧本与结算，必须显式打开
 
                 var outcomes = new List<MistakeOutcome>();
                 runner.MistakeResolved += o => outcomes.Add(o);

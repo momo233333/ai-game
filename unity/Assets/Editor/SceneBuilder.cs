@@ -1288,7 +1288,7 @@ namespace Copilot.EditorTools
             }
 
             var runner = FindInScene<MistakeRunner>(scene);
-            Requires(runner != null, "场景里没有玩法驱动 MistakeRunner（她不会主动犯错）", problems);
+            Requires(runner != null, "场景里没有玩法驱动 MistakeRunner（教学进度台账 / 重开 / 本地语音都靠它）", problems);
             if (runner != null)
             {
                 Requires(runner.connection != null, "MistakeRunner.connection 未连", problems);

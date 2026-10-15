@@ -91,6 +91,9 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
                 var outPcm = native == _targetSampleRate || native <= 0
                     ? pcm
                     : AudioUtil.Resample16(pcm, native, _targetSampleRate);
+                // melo-tts 原生输出峰值只有满量程的 0.3–0.5，实测「声音很小」——
+                // 归一化到 0.9 再下发（`--synth-voicelib` 也走这条路，所以语料与自由句响度一致）。
+                outPcm = AudioUtil.NormalizePeak16(outPcm, 0.9f);
                 return AppendTrailingSilence(outPcm, _targetSampleRate);
             }
             finally

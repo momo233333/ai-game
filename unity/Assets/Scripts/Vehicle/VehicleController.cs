@@ -96,7 +96,13 @@ namespace Copilot.Vehicle
             _body.angularVelocity = Vector3.zero;
         }
 
-        /// <summary>ActionExecutor 每 FixedUpdate 调用一次。<paramref name="throttle"/> 为负表示**倒车**。</summary>
+        /// <summary>
+        /// ActionExecutor 每 FixedUpdate 调用一次。<paramref name="throttle"/> 为负表示**倒车**。
+        ///
+        /// ⚠️ **符号约定（负 = 左，正 = 右）**：<c>steerAngle</c> 为负时前轮向左偏，与 Core 的
+        /// <c>ActionLimits.Canonical(TURN_LEFT) = -0.6</c> 一致。两端符号必须同时改，否则会退回
+        /// 「说往左她往右」；这条约定在 <c>CoreLogicTests.转向符号约定_负值是左_正值是右</c> 里有断言。
+        /// </summary>
         public void ApplyInput(float steering, float throttle, float brake)
         {
             _steer = Mathf.Clamp(steering, -1f, 1f);

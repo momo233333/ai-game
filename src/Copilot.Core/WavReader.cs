@@ -115,9 +115,14 @@ namespace Copilot.Core
     public static class AudioUtil
     {
         /// <summary>
-        /// 重采样（16-bit 单声道 in → out）。**降采样时先做窗口平均（简易低通）**，
-        /// 否则 48k→16k / 44.1k→24k 这种线性插值会把高于目标奈奎斯特频率的齿音、气息
-        /// **折叠回语音频带**（混叠），实测明显拖累 ASR 与听感；升采样走线性插值（不会混叠）。
+        /// 重采样（16-bit 单声道 in → out）。
+        ///
+        /// **降采样必须先抗混叠**：44.1k→24k 这种**非整数倍率**下，早先的「逐输出点取窗口平均」
+        /// 会让每个输出点跨的输入样本数在 1/2/3 之间跳变 —— 等于一个**逐点变化**的平滑器，
+        /// 结果是周期性包络起伏（实测听感就是「声音一段一段的、发闷」）。现在改成：
+        /// ① 先用窗函数 sinc **低通**到目标奈奎斯特（去掉会折叠回来的高频）；
+        /// ② 再在滤波后的信号上做线性插值抽点。滤波器固定，包络就平了。
+        /// 升采样只需插值（不会混叠），跳过低通。
         /// </summary>
         public static byte[] Resample16(byte[] pcm16, int fromRate, int toRate)
         {
@@ -126,44 +131,109 @@ namespace Copilot.Core
             if (fromRate == toRate || pcm16.Length == 0) return pcm16;
 
             int inFrames = pcm16.Length / 2;
-            double ratio = (double)toRate / fromRate;
-            int outFrames = (int)Math.Round(inFrames * ratio);
-            var outBytes = new byte[outFrames * 2];
-
-            if (ratio <= 1.0)
+            var src = new float[inFrames];
+            for (int i = 0; i < inFrames; i++)
             {
-                for (int i = 0; i < outFrames; i++)
-                {
-                    int start = (int)Math.Floor(i / ratio);
-                    int end = (int)Math.Ceiling((i + 1) / ratio) - 1;
-                    if (end < start) end = start;
-                    if (start > inFrames - 1) start = inFrames - 1;
-                    if (end > inFrames - 1) end = inFrames - 1;
-
-                    int sum = 0, n = 0;
-                    for (int k = start; k <= end; k++)
-                    {
-                        sum += BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(k * 2, 2));
-                        n++;
-                    }
-                    short avg = (short)(sum / Math.Max(n, 1));
-                    BinaryPrimitives.WriteInt16LittleEndian(outBytes.AsSpan(i * 2, 2), avg);
-                }
-                return outBytes;
+                src[i] = BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(i * 2, 2)) / 32768f;
             }
+
+            if (toRate < fromRate) src = LowPass(src, fromRate, toRate);
+
+            double step = (double)fromRate / toRate;
+            int outFrames = (int)Math.Round(inFrames * ((double)toRate / fromRate));
+            var outBytes = new byte[outFrames * 2];
 
             for (int i = 0; i < outFrames; i++)
             {
-                double src = i / ratio;
-                int i0 = (int)Math.Floor(src);
+                double pos = i * step;
+                int i0 = (int)pos;
+                if (i0 > inFrames - 1) i0 = inFrames - 1;
                 int i1 = Math.Min(i0 + 1, inFrames - 1);
-                double frac = src - i0;
-                short s0 = BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(i0 * 2, 2));
-                short s1 = BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(i1 * 2, 2));
-                short v = (short)Math.Round(s0 + (s1 - s0) * frac);
-                BinaryPrimitives.WriteInt16LittleEndian(outBytes.AsSpan(i * 2, 2), v);
+                float frac = (float)(pos - i0);
+
+                float v = src[i0] + (src[i1] - src[i0]) * frac;
+                if (v > 1f) v = 1f;
+                else if (v < -1f) v = -1f;
+                BinaryPrimitives.WriteInt16LittleEndian(outBytes.AsSpan(i * 2, 2), (short)Math.Round(v * 32767f));
             }
 
+            return outBytes;
+        }
+
+        /// <summary>
+        /// 窗函数 sinc 低通（Hann 窗，33 抽头，截止 = 目标奈奎斯特 × 0.94）。
+        /// **固定系数**是关键：滤波器不随输出点变化，降采样后不会有周期性包络起伏。
+        /// 边界用夹取（clamp）取样，避免首尾出现爆音。
+        /// </summary>
+        static float[] LowPass(float[] src, int fromRate, int toRate)
+        {
+            const int taps = 33;
+            const int center = taps / 2;
+            double fc = (0.5 * toRate * 0.94) / fromRate;   // 归一化截止（周期/采样）
+
+            var h = new double[taps];
+            double sum = 0;
+            for (int n = 0; n < taps; n++)
+            {
+                double t = n - center;
+                double sinc = Math.Abs(t) < 1e-9 ? 1.0 : Math.Sin(2 * Math.PI * fc * t) / (2 * Math.PI * fc * t);
+                double window = 0.5 - 0.5 * Math.Cos(2 * Math.PI * n / (taps - 1));   // Hann
+                h[n] = sinc * window;
+                sum += h[n];
+            }
+            for (int n = 0; n < taps; n++) h[n] /= sum;        // 归一化：直流增益 = 1
+
+            var y = new float[src.Length];
+            for (int k = 0; k < src.Length; k++)
+            {
+                double acc = 0;
+                for (int n = 0; n < taps; n++)
+                {
+                    int idx = k + center - n;
+                    if (idx < 0) idx = 0;
+                    else if (idx > src.Length - 1) idx = src.Length - 1;
+                    acc += h[n] * src[idx];
+                }
+                y[k] = (float)acc;
+            }
+            return y;
+        }
+
+        /// <summary>
+        /// 峰值归一化：把 PCM16 的峰值拉到 <paramref name="targetPeak"/>（满量程的比例，默认 0.9）。
+        ///
+        /// 动机（实测反馈「声音还很小」）：melo-tts 原生输出的峰值只有满量程的 0.3–0.5，
+        /// 语音库与实时合成都偏轻。放在 Core 里是为了**语音库和自由句走同一条路**，
+        /// 响度一致；同时可单测。
+        /// </summary>
+        public static byte[] NormalizePeak16(byte[] pcm16, float targetPeak = 0.9f)
+        {
+            if (pcm16 == null) throw new ArgumentNullException(nameof(pcm16));
+            if (pcm16.Length < 2) return pcm16;
+
+            int frames = pcm16.Length / 2;
+            int peak = 0;
+            for (int i = 0; i < frames; i++)
+            {
+                int s = BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(i * 2, 2));
+                int mag = s < 0 ? -s : s;
+                if (mag > peak) peak = mag;
+            }
+            if (peak == 0) return pcm16;   // 全静音：没有可放大的东西
+
+            double target = Math.Clamp(targetPeak, 0.05f, 1f) * 32767.0;
+            double gain = target / peak;
+            if (Math.Abs(gain - 1.0) < 0.01) return pcm16;   // 已经够响，不做无意义的搬动
+
+            var outBytes = new byte[pcm16.Length];
+            for (int i = 0; i < frames; i++)
+            {
+                int s = BinaryPrimitives.ReadInt16LittleEndian(pcm16.AsSpan(i * 2, 2));
+                double v = s * gain;
+                if (v > 32767) v = 32767;
+                else if (v < -32767) v = -32767;
+                BinaryPrimitives.WriteInt16LittleEndian(outBytes.AsSpan(i * 2, 2), (short)Math.Round(v));
+            }
             return outBytes;
         }
 
