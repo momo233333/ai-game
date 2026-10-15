@@ -6,6 +6,12 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 > **玩法**：第一人称坐在**副驾驶当教练**，用语音教女学员**小雅**开车；科目一到科目四共四关，
 > 当前实现**科目一 · 教学关**（起步 → 左转 → 右转 → 变道 → 减速 → 靠边停车）。
 >
+> **她会主动犯错**：剧本化的两个失误 —— **偏出车道**（她自顾自往右飘）与**忘了刹车**（一路给油冲向前车）。
+> 屏幕中上部会弹出**警告横幅 + 倒计时**，你得在窗口内（2.6–2.8 秒）开口才救得回来；
+> 没喊住 → 按她的真实物理后果结算（压线 / 差点追尾 / 撞上），并且**当场听得见、看得见她出事**。
+> 关卡结束有**三项指标评分 + 星级**：安全 40 + 及时干预 40 + 教学完成 20（★门槛 90/70/50）。
+> 调试时按 **Enter** 可随时弹出结算面板。
+>
 > **HUD**：右下角实时显示**车速**与**方向盘转角**（看不见这两个数就没法在她犯错前干预）。
 > **可执行动作 7 个**：左转 / 右转 / 加速 / 刹车 / 变道 / 靠边停车 / **倒车**（倒车 = 负油门）。
 > 口语映射：**直行 / 一直往前走 / 保持直线** → 加速；**左前方 / 右前方行驶 / 变道 / 并线** → 变道
@@ -51,11 +57,11 @@ ai-game/
 ├── Copilot.sln                 # ★ V2.0 解决方案
 ├── src/
 │   ├── Copilot.Contracts/      # proto → C# gRPC 契约（netstandard2.1）
-│   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信心情绪/语音库/编排/关卡（netstandard2.1，Unity 可引用）
+│   ├── Copilot.Core/           # 纯逻辑：限幅/安全/信心情绪/语音库/编排/关卡/玩法（netstandard2.1，Unity 可引用）
 │   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 146 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集）
+│   ├── Copilot.Tests/          # xUnit 181 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集 + 玩法层）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：41 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
@@ -65,6 +71,7 @@ ai-game/
 │                               #   + command_samples.txt / voicelib_gen.py / voicelib_synth.py
 ├── unity/                      # ★ Unity 2022.3 LTS 工程（V2.0）：只引用共享库 DLL，接 gRPC-Web
 │                               #   Assets/Scripts（运行时）+ Assets/Editor（自检 + 场景生成器）
+│                               #   Assets/Scripts/Gameplay（RoadGeometry / MistakeRunner）玩法层
 │                               #   Assets/Scenes/Greybox.unity（生成的可玩灰盒场景）
 │                               #   Assets/Plugins/Copilot（DLL，gitignore，由脚本生成）
 └── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
@@ -83,7 +90,7 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1              # �
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only tts    # 只下 TTS（MeloTTS，162 MB）
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（146 项）
+# 1) 编译（0 警告 0 错误）+ 测试（181 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -166,6 +173,11 @@ powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.E
   > （语料库与实时合成不同引擎 = 妹妹一句话换一个嗓门）。SAPI 保留为**离线兜底**（没下模型时仍能出声）。
 - **安全双层**：输入层命中敏感词直接出预置拒绝台词、不进 LLM；输出层再过一遍。
 - **指令三重守卫**：白名单 → 场景规则（如高速不许停车）→ 数值限幅（转向 ±0.8）。
+- **玩法层（主动犯错 + 结算）**：判定在 `Copilot.Core.Gameplay`（纯逻辑可单测），测量/表现在 Unity。
+  Unity 侧 **不判定、不报信任** —— `MistakeRunner` 是全场**唯一**的 `ReportLocalEvent` 出口，
+  避免"失误失败"与"传感器独立检测"指向同一起事故时被各记一次。
+  失误动作经 `ActionExecutor.Execute()` **本地注入**（不过 gRPC），所以玩家的下一句话天然覆盖它 ——
+  这就是「抢在之前干预」，同时也保证了**她犯的错不会被算成教学过关**。
 
 ## gRPC 契约
 

@@ -41,6 +41,8 @@ htmlcov/
 node_modules/
 .vscode/
 .idea/
+# 编辑器/Agent 生成的方案草稿与计划文件（不是交付物）
+.trae/
 
 # 日志与系统文件
 *.log

@@ -120,7 +120,7 @@ namespace Copilot.EditorTools
             var profile = EnsureProfile();
             var city = CreateCity();
             var car = CreateVehicle(profile, city.transform);   // 相机随车一起建（第一人称副驾座）
-            var rig = CreateRig(car);
+            var rig = CreateRig(car, city.GetComponent<RoadGeometry>());
             CreateHud(rig);
 
             if (!AssetDatabase.IsValidFolder(SceneDir))
@@ -215,6 +215,16 @@ namespace Copilot.EditorTools
             CreateBuildings(city.transform, rng);
             CreateStreetLights(city.transform);
             CreateProps(city.transform, rng);
+
+            // 道路几何的**唯一真源**（玩法检测要用）：车道中心/宽度/路口范围。
+            // 数值必须与上面的标线一致（虚线 x=±3.6、边线 x=±7.2 → 车道中心 ±1.8/±5.4）。
+            var road = city.AddComponent<RoadGeometry>();
+            road.roadForward = Vector3.forward;
+            road.laneCenterXs = new[] { -5.4f, -1.8f, 1.8f, 5.4f };
+            road.laneWidthM = 3.6f;
+            road.crossCenterZ = CrossZ;
+            road.crossHalfExtentM = CrossHalfWidth;
+
             return city;
         }
 
@@ -343,6 +353,14 @@ namespace Copilot.EditorTools
                 parked.transform.localPosition = new Vector3(6f, 0f, z);
                 BuildCarBody(parked.transform, new Color(0.25f + 0.3f * (float)rng.NextDouble(), 0.3f, 0.55f), withWheels: true);
             }
+
+            // 「前方那辆车」（失误「忘了刹车」用）：平时藏远处且**不激活**，
+            // 由 MistakeRunner 在失误开演时才摆到车头正前方 —— 常驻会在正常教学流程里伏击玩家。
+            var hazard = new GameObject("HazardCar");
+            hazard.transform.SetParent(parent, false);
+            hazard.transform.localPosition = new Vector3(1.8f, 0f, RoadCenterZ + 150f);
+            BuildCarBody(hazard.transform, new Color(0.62f, 0.34f, 0.30f), withWheels: true);
+            hazard.SetActive(false);
         }
 
         // ---- 车辆 -----------------------------------------------------
@@ -597,12 +615,20 @@ namespace Copilot.EditorTools
             cockpit.restYaw = -12f;
         }
 
-        static GameObject CreateRig(GameObject car)
+        static GameObject CreateRig(GameObject car, RoadGeometry road)
         {
             var rig = new GameObject(RigName);
 
             var connection = rig.AddComponent<CopilotConnection>();
             var vehicle = car.GetComponent<VehicleController>();
+
+            // 传感器（只测量：横向偏移 / 前方障碍距离 / 撞车）。
+            // 道路几何挂在 City 上 —— 注意车是**根物体**（CreateVehicle 的 parent 参数其实没生效），
+            // 所以不能靠 car.transform.parent 去拿，必须显式传进来。
+            var sensors = car.AddComponent<VehicleSensors>();
+            sensors.vehicle = vehicle;
+            sensors.road = road;
+            sensors.hazardCar = road != null ? road.transform.Find("HazardCar") : null;
 
             var gameState = rig.AddComponent<GameStateManager>();
             gameState.connection = connection;
@@ -611,6 +637,15 @@ namespace Copilot.EditorTools
             var executor = rig.AddComponent<ActionExecutor>();
             executor.connection = connection;
             executor.vehicle = vehicle;
+
+            // 玩法层驱动（剧本失误 → 注入 → 判定 → 结算）。
+            // tutorial / bubble 在 CreateHud 里回填（那两个组件是在 CreateHud 才建的）。
+            var runner = rig.AddComponent<MistakeRunner>();
+            runner.connection = connection;
+            runner.executor = executor;
+            runner.gameState = gameState;
+            runner.vehicle = vehicle;
+            runner.sensors = sensors;
 
             var tts = rig.AddComponent<TtsPlayer>();
             tts.connection = connection;
@@ -633,6 +668,9 @@ namespace Copilot.EditorTools
             bootstrap.ttsPlayer = tts;
             bootstrap.mic = mic;
             bootstrap.hud = hud;
+            bootstrap.road = road;
+            bootstrap.sensors = sensors;
+            bootstrap.mistakeRunner = runner;
 
             // 学员说话时扭头看教练 —— ttsPlayer 在 rig 上，所以只能建完 rig 再回填
             var avatar = car.GetComponentInChildren<DriverAvatar>(true);
@@ -759,6 +797,82 @@ namespace Copilot.EditorTools
             driveHud.steerKnob = steerKnob.rectTransform;
             driveHud.steerLabel = steerLabel;
             driveHud.maxWheelAngle = driveHud.steeringWheel != null ? driveHud.steeringWheel.maxAngle : 180f;
+
+            // ---- 玩法层 UI：警告横幅 / 实时分数 / 结算面板 ----
+
+            // 警告横幅：她在犯错、等你开口。放在屏幕中上部，第一人称视角里最显眼的位置
+            // （避开左上角的教程块与底部字幕/仪表，见 Validate 的间距说明）
+            var bannerBg = NewImage("MistakeBannerBg", root, new Color(0.95f, 0.6f, 0.15f, 0.85f));
+            Anchor(bannerBg.rectTransform, new Vector2(0.25f, 0.62f), new Vector2(0.75f, 0.72f), Vector2.zero, Vector2.zero);
+
+            var bannerLabel = NewText("MistakeBanner", root, "", 34, TextAnchor.MiddleCenter,
+                new Vector2(0.25f, 0.62f), new Vector2(0.75f, 0.72f), Vector2.zero, Vector2.zero, Color.white);
+            bannerLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+            bannerBg.enabled = false;
+            bannerLabel.enabled = false;
+
+            var scoreLabel = NewText("ScoreLabel", root, "", 22, TextAnchor.MiddleRight,
+                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-330f, -112f), new Vector2(-30f, -80f),
+                new Color(1f, 0.92f, 0.7f, 0.95f));
+
+            // 结算面板（默认隐藏；六步走完后弹，或按 Enter 手动弹）
+            // 高度按内容定（title/stars/两列 6 行明细）—— 实测 560px 高时下半部空掉一半，收紧到 400
+            var panelGo = new GameObject("SettlementPanel", typeof(RectTransform));
+            panelGo.transform.SetParent(root, false);
+            Anchor(panelGo.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(-360f, -200f), new Vector2(360f, 200f));
+
+            var panelBg = panelGo.AddComponent<Image>();
+            panelBg.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            panelBg.type = Image.Type.Sliced;
+            panelBg.color = new Color(0.05f, 0.06f, 0.09f, 0.92f);
+
+            var settleTitle = NewText("SettlementTitle", panelGo.transform, "教学关结算", 40,
+                TextAnchor.UpperCenter, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0f, -95f), new Vector2(0f, -45f), Color.white);
+
+            var settleStars = NewText("SettlementStars", panelGo.transform, "", 52, TextAnchor.UpperCenter,
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -179f), new Vector2(0f, -99f),
+                new Color(1f, 0.85f, 0.4f));
+
+            var settleStats = NewText("SettlementStats", panelGo.transform, "", 26, TextAnchor.UpperLeft,
+                new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(40f, -330f), new Vector2(-10f, -191f),
+                Color.white);
+            settleStats.verticalOverflow = VerticalWrapMode.Overflow;
+
+            var settleItems = NewText("SettlementItems", panelGo.transform, "", 24, TextAnchor.UpperLeft,
+                new Vector2(0.5f, 1f), new Vector2(1f, 1f), new Vector2(10f, -330f), new Vector2(-40f, -191f),
+                new Color(0.8f, 0.85f, 0.95f));
+            settleItems.horizontalOverflow = HorizontalWrapMode.Wrap;
+            settleItems.verticalOverflow = VerticalWrapMode.Overflow;
+
+            panelGo.SetActive(false);
+
+            // tutorial / bubble 是这里的局部量，所以玩法驱动的引用只能在这里回填
+            // （和上面 bootstrap.bubble 的做法一致）
+            var runner = rig.GetComponent<MistakeRunner>();
+            if (runner != null)
+            {
+                runner.tutorial = tutorial;
+                runner.bubble = bubble;
+                runner.Rebind();            // 引用到位后重新绑定（AddComponent 时引用还是空的）
+            }
+
+            var gameplayHud = rig.AddComponent<GameplayHud>();
+            gameplayHud.runner = runner;
+            gameplayHud.tutorial = tutorial;
+            gameplayHud.bannerBg = bannerBg;
+            gameplayHud.bannerLabel = bannerLabel;
+            gameplayHud.scoreLabel = scoreLabel;
+            gameplayHud.settlementPanel = panelGo;
+            gameplayHud.settlementTitle = settleTitle;
+            gameplayHud.settlementStats = settleStats;
+            gameplayHud.settlementStars = settleStars;
+            gameplayHud.settlementItems = settleItems;
+
+            // 装配方也要拿到玩法 HUD（同 bootstrap.bubble 的回填理由）
+            var bootstrapForHud = rig.GetComponent<CopilotBootstrap>();
+            if (bootstrapForHud != null) bootstrapForHud.gameplayHud = gameplayHud;
         }
 
         // ---- 小工具 ---------------------------------------------------
@@ -922,6 +1036,54 @@ namespace Copilot.EditorTools
             Requires(tutorial != null && tutorial.stepLabel != null, "TutorialDirector.stepLabel 未连", problems);
             Requires(CountInScene(scene, "Dash") >= 1, "没有仪表台，车内是空的", problems);
 
+            // ---- 玩法层（主动犯错 + 结算）----
+            var road = FindInScene<RoadGeometry>(scene);
+            Requires(road != null, "场景里没有道路几何 RoadGeometry（玩法检测靠它）", problems);
+            if (road != null)
+            {
+                Requires(road.laneCenterXs != null && road.laneCenterXs.Length == 4,
+                    "RoadGeometry.laneCenterXs 不是 4 条车道（车道数变了检测会错位）", problems);
+            }
+
+            var sensors = FindInScene<VehicleSensors>(scene);
+            Requires(sensors != null, "Car 上没有 VehicleSensors（横向偏移/前方距离/撞车测不到）", problems);
+            if (sensors != null)
+            {
+                Requires(sensors.vehicle != null, "VehicleSensors.vehicle 未连", problems);
+                Requires(sensors.road != null, "VehicleSensors.road 未连", problems);
+                Requires(sensors.hazardCar != null, "VehicleSensors.hazardCar 未连（「忘了刹车」没有前方车辆）", problems);
+            }
+
+            var runner = FindInScene<MistakeRunner>(scene);
+            Requires(runner != null, "场景里没有玩法驱动 MistakeRunner（她不会主动犯错）", problems);
+            if (runner != null)
+            {
+                Requires(runner.connection != null, "MistakeRunner.connection 未连", problems);
+                Requires(runner.executor != null, "MistakeRunner.executor 未连", problems);
+                Requires(runner.gameState != null, "MistakeRunner.gameState 未连", problems);
+                Requires(runner.vehicle != null, "MistakeRunner.vehicle 未连", problems);
+                Requires(runner.sensors != null, "MistakeRunner.sensors 未连", problems);
+                Requires(runner.tutorial != null, "MistakeRunner.tutorial 未连（拿不到教学进度）", problems);
+                Requires(runner.bubble != null, "MistakeRunner.bubble 未连（她慌了你听不到）", problems);
+            }
+
+            var gameplayHud = FindInScene<GameplayHud>(scene);
+            Requires(gameplayHud != null, "场景里没有玩法 HUD GameplayHud（警告/分数/结算看不见）", problems);
+            if (gameplayHud != null)
+            {
+                Requires(gameplayHud.runner != null, "GameplayHud.runner 未连", problems);
+                Requires(gameplayHud.bannerBg != null && gameplayHud.bannerLabel != null,
+                    "GameplayHud 警告横幅未连", problems);
+                Requires(gameplayHud.scoreLabel != null, "GameplayHud.scoreLabel 未连", problems);
+                Requires(gameplayHud.settlementPanel != null, "GameplayHud 结算面板未连", problems);
+                Requires(gameplayHud.settlementStats != null && gameplayHud.settlementStars != null,
+                    "GameplayHud 结算面板的文字未连", problems);
+            }
+
+            Requires(CountInScene(scene, "HazardCar") >= 1, "没有「前方那辆车」 HazardCar", problems);
+            Requires(CountInScene(scene, "SettlementPanel") >= 1, "没有结算面板 SettlementPanel", problems);
+            Requires(CountInScene(scene, "MistakeBanner") >= 1, "没有警告横幅 MistakeBanner", problems);
+
             // 场景内容：确认 P9 的城市几何真的生成了（空场景也能「校验通过」就没意义了）
             Requires(CountInScene(scene, "Building") >= 10, "楼群数量不足（<10），城市没生成", problems);
             Requires(CountInScene(scene, "StreetLight") >= 8, "路灯数量不足（<8）", problems);
@@ -953,9 +1115,54 @@ namespace Copilot.EditorTools
             // 所以再渲一张「扭头看学员」的，否则没法确认人形到底建出来没有。
             var cockpit = FindInScene<CockpitCamera>(scene);
             float restYaw = cockpit != null ? cockpit.restYaw : 0f;
+
+            // 玩法 UI 平时是隐藏的（横幅要等失误、结算面板要等关卡结束），预览图里就看不见 ——
+            // 而排版问题**只有看图才能发现**。所以在这里临时点亮：第一张放横幅+分数（不挡视野），
+            // 第二张放结算面板（它挡住视野，正好在"扭头"那张里检查排版），渲完还原。
+            var gameplayHud = FindInScene<GameplayHud>(scene);
+            ShowcaseBanner(gameplayHud, true);
             var forward = CaptureView(cam, Quaternion.Euler(0f, restYaw, 0f), PreviewRelativePath);
+            ShowcaseBanner(gameplayHud, false);
+
+            ShowcaseSettlement(gameplayHud, true);
             CaptureView(cam, Quaternion.Euler(0f, -58f, 0f), DriverPreviewRelativePath);
+            ShowcaseSettlement(gameplayHud, false);
+
             return forward;
+        }
+
+        /// <summary>预览图专用：临时点亮/还原「警告横幅 + 实时分数」。</summary>
+        static void ShowcaseBanner(GameplayHud hud, bool on)
+        {
+            if (hud == null) return;
+
+            if (hud.bannerBg != null) hud.bannerBg.enabled = on;
+            if (hud.bannerLabel != null)
+            {
+                hud.bannerLabel.enabled = on;
+                hud.bannerLabel.text = on ? "她偏出车道了！快喊她回正\n快喊她！剩 3 秒" : string.Empty;
+            }
+            if (hud.scoreLabel != null) hud.scoreLabel.text = on ? "本局评分 82" : string.Empty;
+        }
+
+        /// <summary>预览图专用：临时点亮/还原结算面板（填示例数据，方便看排版）。</summary>
+        static void ShowcaseSettlement(GameplayHud hud, bool on)
+        {
+            if (hud == null || hud.settlementPanel == null) return;
+
+            hud.settlementPanel.SetActive(on);
+            if (!on) return;
+
+            if (hud.settlementStars != null) hud.settlementStars.text = "★★☆";
+            if (hud.settlementStats != null)
+            {
+                hud.settlementStats.text = "安全  22 / 40\n及时干预  20 / 40\n教学完成  20 / 20\n总分  82 / 100";
+            }
+            if (hud.settlementItems != null)
+            {
+                hud.settlementItems.text = "撞车：1（-12）\n压线：1（-6）\n及时干预：1（+20）\n"
+                    + "漏掉的失误：1\n教学步：6/6（+20）\n最终信任：52";
+            }
         }
 
         /// <summary>把相机摆到指定姿态渲一帧存 PNG，然后还原。</summary>

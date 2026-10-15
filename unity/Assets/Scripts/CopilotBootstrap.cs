@@ -1,5 +1,6 @@
 using Copilot.AI;
 using Copilot.Audio;
+using Copilot.Gameplay;
 using Copilot.State;
 using Copilot.UI;
 using Copilot.Vehicle;
@@ -33,6 +34,12 @@ namespace Copilot
         public MicCapture mic;
         public DialogueBubble bubble;
         public HudStatus hud;
+
+        [Header("玩法层（留空则自动创建或跳过）")]
+        public RoadGeometry road;
+        public VehicleSensors sensors;
+        public MistakeRunner mistakeRunner;
+        public GameplayHud gameplayHud;
 
         void Awake()
         {
@@ -70,6 +77,39 @@ namespace Copilot
 
             if (bubble != null) bubble.connection = connection;
 
+            // ---- 玩法层（主动犯错 + 结算）----
+            // 道路几何在 City 上、传感器在 Car 上。注意车是**根物体**（没有父节点），
+            // 所以先按层级找，再退回场景查找。**不覆盖已有值** —— 否则会把场景里连好的引用清掉。
+            if (road == null && vehicle != null && vehicle.transform.parent != null)
+            {
+                road = vehicle.transform.parent.GetComponent<RoadGeometry>();
+            }
+            if (road == null) road = FindObjectOfType<RoadGeometry>();
+
+            if (vehicle != null)
+            {
+                if (sensors == null) sensors = vehicle.GetComponent<VehicleSensors>();
+                if (sensors == null) sensors = vehicle.gameObject.AddComponent<VehicleSensors>();
+                if (sensors.vehicle == null) sensors.vehicle = vehicle;
+                if (sensors.road == null) sensors.road = road;
+                if (sensors.hazardCar == null && road != null) sensors.hazardCar = road.transform.Find("HazardCar");
+            }
+
+            if (mistakeRunner == null) mistakeRunner = GetComponent<MistakeRunner>();
+            if (mistakeRunner == null) mistakeRunner = gameObject.AddComponent<MistakeRunner>();
+            mistakeRunner.connection = connection;
+            mistakeRunner.executor = executor;
+            mistakeRunner.gameState = gameState;
+            mistakeRunner.vehicle = vehicle;
+            mistakeRunner.sensors = sensors;
+            mistakeRunner.tutorial = GetComponent<TutorialDirector>();
+            mistakeRunner.bubble = bubble;
+
+            if (gameplayHud == null) gameplayHud = GetComponent<GameplayHud>();
+            if (gameplayHud == null) gameplayHud = gameObject.AddComponent<GameplayHud>();
+            gameplayHud.runner = mistakeRunner;
+            gameplayHud.tutorial = mistakeRunner.tutorial;
+
             connection.Connected += () => Debug.Log("[Copilot] 已连接 AI 服务 " + connection.Endpoint);
             connection.Disconnected += reason => Debug.LogWarning("[Copilot] 断开: " + reason);
             connection.TurnEventReceived += OnTurnEvent;
@@ -80,6 +120,8 @@ namespace Copilot
             gameState.Rebind();
             hud.Rebind();
             if (bubble != null) bubble.Rebind();
+            mistakeRunner.Rebind();
+            gameplayHud.Rebind();
         }
 
         void Start()
