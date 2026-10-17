@@ -717,7 +717,7 @@ namespace Copilot.EditorTools
                 Box("Brow", head, new Vector3(sx * 0.045f, 0.046f, 0.106f), new Vector3(0.044f, 0.009f, 0.014f), _brow, withCollider: false);
             }
             Sphere("NoseTip", head, new Vector3(0f, -0.014f, 0.112f), new Vector3(0.026f, 0.026f, 0.024f), _skin, withCollider: false);
-            Box("Mouth", head, new Vector3(0f, -0.055f, 0.108f), new Vector3(0.052f, 0.013f, 0.014f), _lip, withCollider: false);
+            var mouth = Box("Mouth", head, new Vector3(0f, -0.055f, 0.108f), new Vector3(0.052f, 0.013f, 0.014f), _lip, withCollider: false);
 
             // 头发做成"盖在后脑上"的壳：**前缘必须留在额头之后**（z<0.07），否则会把整张脸罩住
             Sphere("Hair", head, new Vector3(0f, 0.062f, -0.038f), new Vector3(0.216f, 0.19f, 0.205f), _hair, withCollider: false);
@@ -736,6 +736,7 @@ namespace Copilot.EditorTools
             driver.head = head;
             driver.leftArm = leftArm;
             driver.rightArm = rightArm;
+            driver.mouth = mouth.transform;   // 说话时嘴开合（issue #2 ③）
         }
 
         /// <summary>一条手臂：上臂（肩→肘）+ 前臂（肘→盘）+ 手。挂在 <c>ArmL/ArmR</c> 组下，由 DriverAvatar 驱动。</summary>
@@ -986,6 +987,11 @@ namespace Copilot.EditorTools
             var gameState = rig.AddComponent<GameStateManager>();
             gameState.connection = connection;
             gameState.vehicle = vehicle;
+
+            // 学员的紧张微动要读情绪，而情绪真源是 GameStateManager —— 但 DriverAvatar 是在
+            // CreateVehicle 里建的，那时还没有 gameState，所以只能在这里补一次引用（不覆盖已有值）。
+            var driver = car.GetComponentInChildren<DriverAvatar>(true);
+            if (driver != null && driver.gameState == null) driver.gameState = gameState;
 
             var executor = rig.AddComponent<ActionExecutor>();
             executor.connection = connection;
@@ -1417,7 +1423,19 @@ namespace Copilot.EditorTools
                 "相机没挂在车内（应为 Car 的子物体）", problems);
 
             Requires(FindInScene<SteeringWheel>(scene) != null, "场景里没有方向盘", problems);
-            Requires(FindInScene<DriverAvatar>(scene) != null, "驾驶位上没有学员模型", problems);
+
+            // 学员表现驱动（issue #2 ③）：嘴必须接上（说话要动嘴），情绪源必须接上（紧张要有微动）
+            var driver = FindInScene<DriverAvatar>(scene);
+            Requires(driver != null, "驾驶位上没有学员模型", problems);
+            if (driver != null)
+            {
+                Requires(driver.wheel != null, "DriverAvatar.wheel 未连（手不会跟方向盘转）", problems);
+                Requires(driver.head != null, "DriverAvatar.head 未连（不会扭头看教练）", problems);
+                Requires(driver.leftArm != null && driver.rightArm != null, "DriverAvatar 手臂未连", problems);
+                Requires(driver.mouth != null, "DriverAvatar.mouth 未连（说话时不会张嘴）", problems);
+                Requires(driver.gameState != null, "DriverAvatar.gameState 未连（紧张时不会微动）", problems);
+                Requires(driver.ttsPlayer != null, "DriverAvatar.ttsPlayer 未连（不知道什么时候在说话）", problems);
+            }
 
             // ---- 学员的五官/身体（P 轮的"高细节"必须真的生成了，别退回一堆方块）----
             Requires(CountInScene(scene, "Head") >= 1, "学员没有头", problems);
@@ -1589,12 +1607,37 @@ namespace Copilot.EditorTools
             return forward;
         }
 
-        /// <summary>预览图专用：把学员的头扭向副驾（运行时她说话时就是这样），好让人看清五官。</summary>
+        static Vector3 _driverMouthBase = Vector3.zero;
+
+        /// <summary>
+        /// 预览图专用：把学员摆成**「正在说话」**看教练的样子 —— 扭头 + 点头 + 张嘴。
+        ///
+        /// 为什么必须手动摆：编辑模式不跑 `Update`，而且没有音频 → `TtsPlayer.IsSpeaking` 永远是 false，
+        /// 不摆一下这张图里就没有嘴型 —— 而 issue #2 的 ③ 要检查的恰恰是「说话时脸上有没有动作」。
+        /// </summary>
         static void ShowcaseDriverFace(Scene scene, bool on)
         {
             var avatar = FindInScene<DriverAvatar>(scene);
-            if (avatar == null || avatar.head == null) return;
-            avatar.head.localRotation = on ? Quaternion.Euler(0f, 58f, 0f) : Quaternion.identity;
+            if (avatar == null) return;
+
+            if (avatar.head != null)
+            {
+                // 与 DriverAvatar 的约定一致：(pitch 点头, yaw 扭头, roll)
+                avatar.head.localRotation = on ? Quaternion.Euler(3f, 58f, 0f) : Quaternion.identity;
+            }
+
+            if (avatar.mouth == null) return;
+
+            if (on)
+            {
+                _driverMouthBase = avatar.mouth.localScale;
+                avatar.mouth.localScale = new Vector3(
+                    _driverMouthBase.x * 0.85f, _driverMouthBase.y * 2.2f, _driverMouthBase.z);
+            }
+            else if (_driverMouthBase != Vector3.zero)
+            {
+                avatar.mouth.localScale = _driverMouthBase;
+            }
         }
 
         /// <summary>
