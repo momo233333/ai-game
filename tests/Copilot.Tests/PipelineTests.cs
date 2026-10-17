@@ -385,7 +385,7 @@ public class TtsRouterTests
         var result = router.Route("voicelib://L001", "随便的文本", Intents.Ignore, Emotion.Calm);
 
         Assert.True(result.FromVoiceLib);
-        Assert.Equal("好，左转……我看着点后视镜", result.Text);
+        Assert.Equal("好呀，左转……我先瞅一眼后视镜哦", result.Text);
     }
 
     [Fact]

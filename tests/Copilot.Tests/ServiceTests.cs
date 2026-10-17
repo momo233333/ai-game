@@ -74,7 +74,7 @@ public class ProtoMapperTests
     [Fact]
     public void 事件映射_音频带采样率与语音库标志()
     {
-        var ev = Core.TurnEvent.Tts(new byte[] { 1, 2, 3, 4 }, 24000, true, "好，左转……我看着点后视镜");
+        var ev = Core.TurnEvent.Tts(new byte[] { 1, 2, 3, 4 }, 24000, true, "好呀，左转……我先瞅一眼后视镜哦");
 
         var proto = ProtoMapper.ToProto(ev);
 

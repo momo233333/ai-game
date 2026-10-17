@@ -24,13 +24,13 @@ public class VoiceLibTests
     {
         var entry = TestPaths.LoadVoiceLib().FindById("L001");
         Assert.NotNull(entry);
-        Assert.Equal("好，左转……我看着点后视镜", entry!.Text);
+        Assert.Equal("好呀，左转……我先瞅一眼后视镜哦", entry!.Text);
     }
 
     [Fact]
     public void 按文本精确匹配()
     {
-        var entry = TestPaths.LoadVoiceLib().FindByText("好，左转……我看着点后视镜");
+        var entry = TestPaths.LoadVoiceLib().FindByText("好呀，左转……我先瞅一眼后视镜哦");
         Assert.Equal("L001", entry?.Id);
     }
 

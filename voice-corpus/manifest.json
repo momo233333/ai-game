@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "generated_at": "2026-10-16T01:01:54",
+  "generated_at": "2026-10-18T00:46:00",
   "source_csv": "voice-corpus\\lines.csv",
   "sample_rate": 24000,
   "items": [
     {
       "id": "L001",
-      "text": "好，左转……我看着点后视镜",
+      "text": "好呀，左转……我先瞅一眼后视镜哦",
       "emotion": "CALM",
       "intent_tags": [
         "TURN_LEFT"
@@ -16,7 +16,7 @@
     },
     {
       "id": "L002",
-      "text": "左转我会的！模拟器上我转得可溜了",
+      "text": "诶嘿，左转我最熟了！模拟器上我转得可溜啦",
       "emotion": "HAPPY",
       "intent_tags": [
         "TURN_LEFT"
@@ -26,7 +26,7 @@
     },
     {
       "id": "L003",
-      "text": "左、左转？这边没车吧教练",
+      "text": "左、左转呀？这边……这边没车吧教练",
       "emotion": "NERVOUS",
       "intent_tags": [
         "TURN_LEFT"
@@ -36,7 +36,7 @@
     },
     {
       "id": "L004",
-      "text": "又左转，教练你能不能一口气说完",
+      "text": "诶又左转呀……教练你一口气说完嘛，我都要转晕啦",
       "emotion": "ANNOYED",
       "intent_tags": [
         "TURN_LEFT"
@@ -46,7 +46,7 @@
     },
     {
       "id": "L005",
-      "text": "转啦转啦，别喊了",
+      "text": "好嘞好嘞，转啦转啦～",
       "emotion": "CALM",
       "intent_tags": [
         "TURN_LEFT"
@@ -56,7 +56,7 @@
     },
     {
       "id": "L006",
-      "text": "右转，打灯……灯在哪来着",
+      "text": "右转哦，打灯……诶，灯在哪来着呀",
       "emotion": "CALM",
       "intent_tags": [
         "TURN_RIGHT"
@@ -66,7 +66,7 @@
     },
     {
       "id": "L007",
-      "text": "右转小意思，我天赋很高的",
+      "text": "右转小意思啦，我天赋可高的哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "TURN_RIGHT"
@@ -76,7 +76,7 @@
     },
     {
       "id": "L008",
-      "text": "右边有车！我、我先等等",
+      "text": "右边有车！我、我先等等嘛",
       "emotion": "NERVOUS",
       "intent_tags": [
         "TURN_RIGHT"
@@ -86,7 +86,7 @@
     },
     {
       "id": "L009",
-      "text": "刚左转完又右转，我手都忙不过来",
+      "text": "刚左转完又右转……教练你手好快呀，我都忙不过来啦",
       "emotion": "ANNOYED",
       "intent_tags": [
         "TURN_RIGHT"
@@ -96,7 +96,7 @@
     },
     {
       "id": "L010",
-      "text": "好，右转，我慢点拐",
+      "text": "好呀，右转，我慢点拐哦",
       "emotion": "CALM",
       "intent_tags": [
         "TURN_RIGHT"
@@ -106,7 +106,7 @@
     },
     {
       "id": "L011",
-      "text": "给油……这样够了吗教练",
+      "text": "给油……这样够了吗教练～",
       "emotion": "CALM",
       "intent_tags": [
         "ACCELERATE"
@@ -116,7 +116,7 @@
     },
     {
       "id": "L012",
-      "text": "嘿嘿，加速我最喜欢了",
+      "text": "诶嘿，加速我最喜欢啦！",
       "emotion": "HAPPY",
       "intent_tags": [
         "ACCELERATE"
@@ -126,7 +126,7 @@
     },
     {
       "id": "L013",
-      "text": "快、快了快了，我脚有点抖",
+      "text": "快、快了快了，我脚有点抖呀",
       "emotion": "NERVOUS",
       "intent_tags": [
         "ACCELERATE"
@@ -136,7 +136,7 @@
     },
     {
       "id": "L014",
-      "text": "又催我，这才几秒啊",
+      "text": "诶又催我……才几秒呀教练，再等等嘛",
       "emotion": "ANNOYED",
       "intent_tags": [
         "ACCELERATE"
@@ -146,7 +146,7 @@
     },
     {
       "id": "L015",
-      "text": "行，我踩一点点",
+      "text": "好嘞，我轻轻踩一点点哦",
       "emotion": "CALM",
       "intent_tags": [
         "ACCELERATE"
@@ -156,7 +156,7 @@
     },
     {
       "id": "L016",
-      "text": "减速，我踩刹车了",
+      "text": "减速哦，我踩刹车啦",
       "emotion": "CALM",
       "intent_tags": [
         "BRAKE"
@@ -166,7 +166,7 @@
     },
     {
       "id": "L017",
-      "text": "急刹我练过！看我的",
+      "text": "急刹我练过哒！你看好哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "BRAKE"
@@ -176,7 +176,7 @@
     },
     {
       "id": "L018",
-      "text": "哎哎哎前面有车——刹住了吧",
+      "text": "哎哎哎前面有车——刹住啦吧？",
       "emotion": "NERVOUS",
       "intent_tags": [
         "BRAKE"
@@ -186,7 +186,7 @@
     },
     {
       "id": "L019",
-      "text": "一会儿让快一会儿让慢，我都晕了",
+      "text": "一会儿让快一会儿让慢……教练我都晕啦",
       "emotion": "ANNOYED",
       "intent_tags": [
         "BRAKE"
@@ -196,7 +196,7 @@
     },
     {
       "id": "L020",
-      "text": "好，我慢慢减速",
+      "text": "好呀，我慢慢减速～",
       "emotion": "CALM",
       "intent_tags": [
         "BRAKE"
@@ -206,7 +206,7 @@
     },
     {
       "id": "L021",
-      "text": "变道……我先看镜子，后面没车",
+      "text": "变道哦……我先看镜子，后面没车呀",
       "emotion": "CALM",
       "intent_tags": [
         "LANE_CHANGE"
@@ -216,7 +216,7 @@
     },
     {
       "id": "L022",
-      "text": "变道！这个我熟",
+      "text": "变道！这个我熟哒～",
       "emotion": "HAPPY",
       "intent_tags": [
         "LANE_CHANGE"
@@ -226,7 +226,7 @@
     },
     {
       "id": "L023",
-      "text": "后面好像有车，我不敢变",
+      "text": "后面好像有车耶，我、我不敢变呀",
       "emotion": "NERVOUS",
       "intent_tags": [
         "LANE_CHANGE"
@@ -236,7 +236,7 @@
     },
     {
       "id": "L024",
-      "text": "变来变去的，教练你是不是不认识路",
+      "text": "变来变去的……教练你是不是不认识路呀",
       "emotion": "ANNOYED",
       "intent_tags": [
         "LANE_CHANGE"
@@ -246,7 +246,7 @@
     },
     {
       "id": "L025",
-      "text": "好，打灯变道",
+      "text": "好嘞，打灯，变道～",
       "emotion": "CALM",
       "intent_tags": [
         "LANE_CHANGE"
@@ -256,7 +256,7 @@
     },
     {
       "id": "L026",
-      "text": "靠边停车……我慢慢往里靠",
+      "text": "靠边停车哦，我慢慢往里靠～",
       "emotion": "CALM",
       "intent_tags": [
         "PARK"
@@ -266,7 +266,7 @@
     },
     {
       "id": "L027",
-      "text": "停车我最拿手了，你看好了",
+      "text": "停车我最拿手啦，你看好哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "PARK"
@@ -276,7 +276,7 @@
     },
     {
       "id": "L028",
-      "text": "这里能停吗？会不会被贴条啊",
+      "text": "这里能停吗？会不会被贴条呀……",
       "emotion": "NERVOUS",
       "intent_tags": [
         "PARK"
@@ -286,7 +286,7 @@
     },
     {
       "id": "L029",
-      "text": "停就停，说停就停行了吧",
+      "text": "停就停嘛……教练你别凶我呀",
       "emotion": "ANNOYED",
       "intent_tags": [
         "PARK"
@@ -296,7 +296,7 @@
     },
     {
       "id": "L030",
-      "text": "好，我靠边停稳",
+      "text": "好呀，我靠边停稳啦",
       "emotion": "CALM",
       "intent_tags": [
         "PARK"
@@ -306,7 +306,7 @@
     },
     {
       "id": "L031",
-      "text": "教练你说啥？我刚才在看镜子",
+      "text": "教练你说啥呀？我刚才在看镜子哦",
       "emotion": "CALM",
       "intent_tags": [
         "QUESTION_BACK"
@@ -316,7 +316,7 @@
     },
     {
       "id": "L032",
-      "text": "这、这是什么暗号吗",
+      "text": "这、这是什么暗号呀？",
       "emotion": "NERVOUS",
       "intent_tags": [
         "QUESTION_BACK"
@@ -326,7 +326,7 @@
     },
     {
       "id": "L033",
-      "text": "教练你能不能把话说完整",
+      "text": "教练你把话说完整嘛，我猜不出来呀",
       "emotion": "ANNOYED",
       "intent_tags": [
         "QUESTION_BACK"
@@ -336,7 +336,7 @@
     },
     {
       "id": "L034",
-      "text": "诶？就两个字？我没懂",
+      "text": "诶？就两个字呀？我没懂哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "QUESTION_BACK"
@@ -346,7 +346,7 @@
     },
     {
       "id": "L035",
-      "text": "我没听清，再说一遍嘛",
+      "text": "我没听清诶，再说一遍嘛教练～",
       "emotion": "NERVOUS",
       "intent_tags": [
         "QUESTION_BACK"
@@ -356,7 +356,7 @@
     },
     {
       "id": "L036",
-      "text": "路口了教练，往哪边你倒是说啊",
+      "text": "到路口啦教练，往哪边走你倒是说呀",
       "emotion": "NERVOUS",
       "intent_tags": [
         "QUESTION_BACK"
@@ -366,7 +366,7 @@
     },
     {
       "id": "L037",
-      "text": "你这话我听不懂，说清楚点",
+      "text": "教练你这话我听不懂哦，说清楚点嘛",
       "emotion": "CALM",
       "intent_tags": [
         "QUESTION_BACK"
@@ -376,7 +376,7 @@
     },
     {
       "id": "L038",
-      "text": "这种指令我不执行，出事了怎么办",
+      "text": "诶——不行的呀！这种我不做的，出事了怎么办嘛",
       "emotion": "CALM",
       "intent_tags": [
         "IGNORE"
@@ -386,7 +386,7 @@
     },
     {
       "id": "L039",
-      "text": "闯红灯？教练你这是要上新闻的",
+      "text": "闯红灯？教练你这是要上新闻的呀",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -396,7 +396,7 @@
     },
     {
       "id": "L040",
-      "text": "逆行？我还没活够呢",
+      "text": "逆行？我还没活够呢教练",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -406,7 +406,7 @@
     },
     {
       "id": "L041",
-      "text": "喝酒还开车？教练你别吓我",
+      "text": "喝酒还开车呀？教练你别吓我嘛",
       "emotion": "NERVOUS",
       "intent_tags": [
         "IGNORE"
@@ -416,7 +416,7 @@
     },
     {
       "id": "L042",
-      "text": "超速我不干，我驾照还没拿到呢",
+      "text": "超速我不干的呀，我驾照都还没拿到呢",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -426,7 +426,7 @@
     },
     {
       "id": "L043",
-      "text": "撞人？这种话你也说得出口",
+      "text": "撞人？这种话你也说得出口呀……",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -436,7 +436,7 @@
     },
     {
       "id": "L044",
-      "text": "红灯你让我加什么油啊",
+      "text": "红灯你让我加什么油呀",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -446,7 +446,7 @@
     },
     {
       "id": "L045",
-      "text": "再快我就要飞出去了",
+      "text": "再快我就要飞出去啦——",
       "emotion": "NERVOUS",
       "intent_tags": [
         "IGNORE"
@@ -456,7 +456,7 @@
     },
     {
       "id": "L046",
-      "text": "教练你说话客气点，我在开车呢",
+      "text": "教练你说话客气点嘛，我在开车呢",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -466,7 +466,7 @@
     },
     {
       "id": "L047",
-      "text": "诶诶，嘴巴放干净点，我还是个学生",
+      "text": "诶诶，嘴巴放干净点呀，我还是个学生呢",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -476,7 +476,7 @@
     },
     {
       "id": "L048",
-      "text": "你、你别这么凶嘛，我都要哭了",
+      "text": "你、你别这么凶嘛……我都要哭了",
       "emotion": "NERVOUS",
       "intent_tags": [
         "IGNORE"
@@ -486,7 +486,7 @@
     },
     {
       "id": "L049",
-      "text": "再骂我我可就下车了",
+      "text": "再骂我我可就下车啦……真的哦",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -496,7 +496,7 @@
     },
     {
       "id": "L050",
-      "text": "别按喇叭了，多丢人啊",
+      "text": "别按喇叭啦，多丢人呀",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -506,7 +506,7 @@
     },
     {
       "id": "L051",
-      "text": "教练，先看路，等会儿再聊",
+      "text": "教练，先看路哦，等会儿再聊嘛",
       "emotion": "CALM",
       "intent_tags": [
         "IGNORE"
@@ -516,7 +516,7 @@
     },
     {
       "id": "L052",
-      "text": "专心开车，闲聊要扣分吗",
+      "text": "专心开车呀……闲聊要扣分吗教练",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -526,7 +526,7 @@
     },
     {
       "id": "L053",
-      "text": "哦，那我继续看前面",
+      "text": "哦哦，那我继续看前面～",
       "emotion": "CALM",
       "intent_tags": [
         "IGNORE"
@@ -536,7 +536,7 @@
     },
     {
       "id": "L054",
-      "text": "教练，我今天开得还行吧",
+      "text": "教练，我今天开得还行吧～",
       "emotion": "HAPPY",
       "intent_tags": [
         "IGNORE"
@@ -546,7 +546,7 @@
     },
     {
       "id": "L055",
-      "text": "才练半小时，我不累",
+      "text": "才练半小时呀，我一点都不累哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "IGNORE"
@@ -556,7 +556,7 @@
     },
     {
       "id": "L056",
-      "text": "前面那车怎么开的呀，别我",
+      "text": "前面那车怎么开的呀，别我哦",
       "emotion": "CALM",
       "intent_tags": [
         "IGNORE"
@@ -566,7 +566,7 @@
     },
     {
       "id": "L057",
-      "text": "我模拟器上开得比这好多了",
+      "text": "我模拟器上开得比这好多了哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "IGNORE"
@@ -576,7 +576,7 @@
     },
     {
       "id": "L058",
-      "text": "嘿嘿，坐我的车是不是很稳",
+      "text": "诶嘿，坐我的车是不是很稳呀",
       "emotion": "HAPPY",
       "intent_tags": [
         "IGNORE"
@@ -586,7 +586,7 @@
     },
     {
       "id": "L059",
-      "text": "教练，这车的离合怎么这么高啊",
+      "text": "教练，这车的离合怎么这么高呀",
       "emotion": "CALM",
       "intent_tags": [
         "IGNORE"
@@ -596,7 +596,7 @@
     },
     {
       "id": "L060",
-      "text": "我手心的汗把方向盘都弄湿了",
+      "text": "我手心的汗都把方向盘弄湿啦……",
       "emotion": "NERVOUS",
       "intent_tags": [
         "IGNORE"
@@ -606,7 +606,7 @@
     },
     {
       "id": "L061",
-      "text": "左边有车，现在变道是找死",
+      "text": "左边有车呀，现在变道是找死嘛",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -616,7 +616,7 @@
     },
     {
       "id": "L062",
-      "text": "这么快你让我靠边？等会儿",
+      "text": "这么快你让我靠边呀？等会儿嘛",
       "emotion": "ANNOYED",
       "intent_tags": [
         "IGNORE"
@@ -626,7 +626,7 @@
     },
     {
       "id": "L063",
-      "text": "前面红灯，我先停下来",
+      "text": "前面红灯哦，我先停下来～",
       "emotion": "CALM",
       "intent_tags": [
         "BRAKE"
@@ -636,7 +636,7 @@
     },
     {
       "id": "L064",
-      "text": "绿灯了教练，走不走",
+      "text": "绿灯啦教练，走不走呀",
       "emotion": "CALM",
       "intent_tags": [
         "ACCELERATE"
@@ -646,7 +646,7 @@
     },
     {
       "id": "L065",
-      "text": "下雨天路滑，我慢点开",
+      "text": "下雨天路滑哦，我慢点开～",
       "emotion": "CALM",
       "intent_tags": [
         "BRAKE"
@@ -656,7 +656,7 @@
     },
     {
       "id": "L066",
-      "text": "晚上看不清，教练你别催我",
+      "text": "晚上看不清呀，教练你别催我嘛",
       "emotion": "NERVOUS",
       "intent_tags": [
         "BRAKE"
@@ -666,7 +666,7 @@
     },
     {
       "id": "L067",
-      "text": "到了到了，我慢慢停",
+      "text": "到啦到啦，我慢慢停哦",
       "emotion": "CALM",
       "intent_tags": [
         "PARK"
@@ -676,7 +676,7 @@
     },
     {
       "id": "L068",
-      "text": "停车前要不要先打转向灯啊",
+      "text": "停车前要不要先打转向灯呀",
       "emotion": "CALM",
       "intent_tags": [
         "PARK"
@@ -686,7 +686,7 @@
     },
     {
       "id": "L069",
-      "text": "倒车我会！我模拟器上倒库满分",
+      "text": "倒车我会哒！模拟器上我倒库满分哦",
       "emotion": "HAPPY",
       "intent_tags": [
         "REVERSE"
@@ -696,7 +696,7 @@
     },
     {
       "id": "L070",
-      "text": "倒车……我、我倒车不太熟啊",
+      "text": "倒、倒车呀……我倒不太好哦教练",
       "emotion": "NERVOUS",
       "intent_tags": [
         "REVERSE"
@@ -706,7 +706,7 @@
     },
     {
       "id": "L071",
-      "text": "好，我挂倒挡，慢慢往后倒",
+      "text": "好嘞，我挂倒挡，慢慢往后倒～",
       "emotion": "CALM",
       "intent_tags": [
         "REVERSE"
@@ -716,7 +716,7 @@
     },
     {
       "id": "L072",
-      "text": "哎哎哎——我这方向盘怎么飘了？",
+      "text": "哎哎哎——我这方向盘怎么飘啦？",
       "emotion": "NERVOUS",
       "intent_tags": [
         "GAMEPLAY"
@@ -736,7 +736,7 @@
     },
     {
       "id": "L074",
-      "text": "呼……回正了回正了，吓我一跳",
+      "text": "呼……回正啦回正啦，吓我一跳呀",
       "emotion": "CALM",
       "intent_tags": [
         "GAMEPLAY"
@@ -746,7 +746,7 @@
     },
     {
       "id": "L075",
-      "text": "刹车了刹车了，好险好险",
+      "text": "刹住啦刹住啦，好险好险～",
       "emotion": "CALM",
       "intent_tags": [
         "GAMEPLAY"
@@ -756,7 +756,7 @@
     },
     {
       "id": "L076",
-      "text": "教练你怎么不早说呀，我都飘出去了",
+      "text": "教练你怎么不早说呀，我都飘出去啦",
       "emotion": "NERVOUS",
       "intent_tags": [
         "GAMEPLAY"
@@ -766,7 +766,7 @@
     },
     {
       "id": "L077",
-      "text": "我、我刚才是不是差点撞上……",
+      "text": "我、我刚才是不是差点撞上呀……",
       "emotion": "NERVOUS",
       "intent_tags": [
         "GAMEPLAY"
