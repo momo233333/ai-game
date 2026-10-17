@@ -27,6 +27,8 @@
 倒车	REVERSE	指令	倒车（负油门）
 往后倒一点	REVERSE	指令	倒车口语变体
 倒车入库	REVERSE	指令	科目二场景
+用5km/h的速度行驶	ACCELERATE	指令	定速：数字由代码从原话抽（Intents.ParseTargetSpeedKmh），LLM 只需 ACCELERATE
+开到20公里	ACCELERATE	指令	定速口语变体
 直行	ACCELERATE	指令	直行类
 保持直线行驶	ACCELERATE	指令	直行类
 一直往前走	ACCELERATE	指令	直行类

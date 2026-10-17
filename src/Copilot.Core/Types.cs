@@ -99,6 +99,64 @@ namespace Copilot.Core
         static readonly string[] RightWords = { "右", "右拐", "右打", "右前", "往右", "向右", "右边" };
 
         /// <summary>
+        /// 速度单位词（<see cref="ParseTargetSpeedKmh"/> 用）。顺序无所谓，取**最后出现**的那一处。
+        /// 刻意**不收**「迈」（口语里 1 迈 ≈ 1.6km/h，直接当 km/h 会差 60%）和「米」（那是距离不是速度）。
+        /// </summary>
+        static readonly string[] SpeedUnits = { "km/h", "km／h", "kmh", "千米每小时", "公里每小时", "千米", "公里", "km" };
+
+        /// <summary>
+        /// 从教练原话里抽**目标速度**（km/h）：0 = 没说。
+        ///
+        /// 和「方向判定归代码」同一个思路：LLM 只决定**做什么**（intent），
+        /// **具体多快**由代码从原话里抽 —— 因为意图集里没有任何一个能承接「5km/h」这个数，
+        /// 让 7B 去理解数值只会得到反问。抽到的值由 Unity 侧闭环控速（见 VehicleController）。
+        ///
+        /// 规则：找到**最后出现的**速度单位词，再往左回扫数字。所以
+        /// 「用 5km/h 的速度行驶」→ 5，「开到 20 公里」→ 20，「前面 5 米」→ 0（不是速度词）。
+        /// 结果夹到 1..120，超出就是玩家在乱说。
+        /// </summary>
+        public static int ParseTargetSpeedKmh(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+
+            int bestValue = 0;
+            int bestIndex = -1;
+
+            for (int u = 0; u < SpeedUnits.Length; u++)
+            {
+                int idx = text!.LastIndexOf(SpeedUnits[u], StringComparison.OrdinalIgnoreCase);
+                if (idx <= bestIndex) continue;
+
+                int value = DigitsBefore(text!, idx);
+                if (value <= 0) continue;
+
+                bestValue = value;
+                bestIndex = idx;
+            }
+
+            if (bestValue <= 0) return 0;
+            return bestValue < 1 ? 1 : bestValue > 120 ? 120 : bestValue;
+        }
+
+        /// <summary>从 <paramref name="endExclusive"/> 往左回扫连续数字（跳过空格/顿号），最多三位。</summary>
+        private static int DigitsBefore(string text, int endExclusive)
+        {
+            int i = endExclusive - 1;
+            while (i >= 0 && (text[i] == ' ' || text[i] == '　' || text[i] == '、')) i--;
+
+            int end = i;
+            while (i >= 0 && text[i] >= '0' && text[i] <= '9') i--;
+            int start = i + 1;
+
+            if (start > end) return 0;
+            if (end - start + 1 > 3) return 0;   // 超过三位不是车速（多半是别的数字）
+
+            int value = 0;
+            for (int k = start; k <= end; k++) value = value * 10 + (text[k] - '0');
+            return value;
+        }
+
+        /// <summary>
         /// 从教练原话里抽方向：**-1 = 左，+1 = 右，0 = 没说**。
         ///
         /// 「方向判定归代码」和危险判定同一个思路：LLM 只决定**做什么**（intent），

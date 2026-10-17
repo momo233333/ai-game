@@ -33,8 +33,31 @@ namespace Copilot.Vehicle
         float _steer;
         float _throttle;
         float _brake;
+        float _targetSpeedKmh;
         Vector3 _startPosition;
         Quaternion _startRotation;
+
+        /// <summary>
+        /// 定速目标（km/h）；**0 = 不定速**。由 <c>ActionExecutor</c> 从玩家原话里抽出来设置
+        /// （见 <c>Intents.ParseTargetSpeedKmh</c> —— 意图集里没有任何一个能承接「5km/h」这个数）。
+        /// 非 0 时 <see cref="ApplyInput"/> 会用比例控制替代油门/刹车，转到目标速度并稳住。
+        /// </summary>
+        public float TargetSpeedKmh
+        {
+            get { return _targetSpeedKmh; }
+        }
+
+        /// <summary>设定定速目标（km/h）；传 &lt;= 0 等于取消。</summary>
+        public void SetTargetSpeed(float kmh)
+        {
+            _targetSpeedKmh = kmh > 0f ? kmh : 0f;
+        }
+
+        /// <summary>取消定速（收到刹车/停车/拒绝指令，或重开一局时）。</summary>
+        public void ClearTargetSpeed()
+        {
+            _targetSpeedKmh = 0f;
+        }
 
         public float CurrentSteer
         {
@@ -89,6 +112,7 @@ namespace Copilot.Vehicle
         /// </summary>
         public void ResetToStart()
         {
+            ClearTargetSpeed();   // 定速也要清 —— 否则重开一局车会自己照旧巡航
             ClearInput();
             transform.SetPositionAndRotation(_startPosition, _startRotation);
             if (_body == null) return;
@@ -106,8 +130,31 @@ namespace Copilot.Vehicle
         public void ApplyInput(float steering, float throttle, float brake)
         {
             _steer = Mathf.Clamp(steering, -1f, 1f);
-            _throttle = Mathf.Clamp(throttle, -1f, 1f);   // 负 = 倒车（见 Intents.Reverse）
+            float wantThrottle = Mathf.Clamp(throttle, -1f, 1f);   // 负 = 倒车（见 Intents.Reverse）
             _brake = Mathf.Clamp01(brake);
+
+            // 定速：玩家说了「用 X km/h 行驶」就由**代码闭环**保持 —— 意图集承接不了这个具体数字，
+            // 所以目标值是从原话抽出来、由 ActionExecutor 传进来的（见 Intents.ParseTargetSpeedKmh）。
+            // 两条边界：倒车时不介入（别跟倒挡抢）；目标高于本档案上限就按上限跑。
+            bool reversing = wantThrottle < 0f;
+            if (_targetSpeedKmh > 0f && !reversing)
+            {
+                float cap = profile != null ? profile.maxSpeedKmh : 140f;
+                float target = Mathf.Min(_targetSpeedKmh, cap);
+                float err = target - SpeedKmh;                 // 正 = 还没到，负 = 超了
+                if (Mathf.Abs(err) < 0.6f)
+                {
+                    wantThrottle = 0f;                         // 死区：到点了就松，别一脚一脚地踹
+                    _brake = 0f;
+                }
+                else
+                {
+                    wantThrottle = Mathf.Clamp(err / 5f, 0f, 1f);   // 差 5km/h 就到满油门
+                    _brake = Mathf.Clamp(-err / 5f, 0f, 1f);        // 超了就按超出量刹车
+                }
+            }
+
+            _throttle = wantThrottle;
 
             float maxSteer = profile != null ? profile.maxSteerAngle : 32f;
             float motor = profile != null ? profile.motorTorque : 1400f;
@@ -118,7 +165,6 @@ namespace Copilot.Vehicle
             if (wheelFrontRight != null) wheelFrontRight.steerAngle = targetAngle;
 
             float speedKmh = SpeedKmh;
-            bool reversing = _throttle < 0f;
             float maxSpeed = reversing
                 ? reverseMaxSpeedKmh
                 : (profile != null ? profile.maxSpeedKmh : 140f);

@@ -76,7 +76,15 @@ namespace Copilot.Core.Llm
                 return Move(Intents.Brake, "减速减速，别催", 0f);
             }
 
-            // 7) 说不清 → 反问（技术缺陷转化为玩法，方案 §5.1）
+            // 7) 定速：原话里有明确速度（「用5km/h行驶」「开到20公里」）也当 ACCELERATE。
+            //    具体数字由 Unity 侧闭环保持（Intents.ParseTargetSpeedKmh），**规则后端不重复实现一遍** ——
+            //    但必须认得这类说法，否则清空 models/ 之后同一句话的意图会跟真 LLM 不一致（S 轮的约定）。
+            if (Intents.ParseTargetSpeedKmh(t) > 0)
+            {
+                return Move(Intents.Accelerate, "行，我把速度稳住。", 0f);
+            }
+
+            // 8) 说不清 → 反问（技术缺陷转化为玩法，方案 §5.1）
             return new LlmOutput
             {
                 Action = ActionLimits.Canonical(Intents.QuestionBack),

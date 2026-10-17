@@ -660,12 +660,17 @@ namespace Copilot.EditorTools
             // 方向盘（脚本驱动转动）+ 盘辐让转动看得出来
             var wheelRoot = new GameObject("SteeringWheel");
             wheelRoot.transform.SetParent(car, false);
-            wheelRoot.transform.localPosition = new Vector3(-0.42f, 0.92f, 0.48f);
+            // ⚠️ 高度 1.00 而不是 0.92：学员躯干顶在 y≈1.07，方向盘放 0.92 时**整盘正好藏在她身后**，
+            // 副驾视角只能看到上沿一条边。抬高 + 加大之后上半个盘能露在肩线以上，玩家才看得见她打了多少方向。
+            wheelRoot.transform.localPosition = new Vector3(-0.42f, 1.00f, 0.48f);
 
-            Cylinder("Disc", wheelRoot.transform, Vector3.zero, new Vector3(0.36f, 0.035f, 0.36f), _console,
+            // 盘体用 **cabinTrim（中灰）** 而不是 console（近黑）：前者能在暗车厢里显形 ——
+            // 原来整个盘是 0.11 的近黑，跟仪表台糊成一片，等于"没有方向盘"。
+            // 辐条用 chrome（亮银）：**转动靠辐条才看得出来**，不然盘转了你只看到一个纯色圆片。
+            Cylinder("Disc", wheelRoot.transform, Vector3.zero, new Vector3(0.42f, 0.04f, 0.42f), _cabinTrim,
                 Quaternion.Euler(90f, 0f, 0f), withCollider: false);
-            Box("SpokeH", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.34f, 0.035f, 0.03f), _cabinTrim, withCollider: false);
-            Box("SpokeV", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.035f, 0.34f, 0.03f), _cabinTrim, withCollider: false);
+            Box("SpokeH", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.40f, 0.045f, 0.035f), _chrome, withCollider: false);
+            Box("SpokeV", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.045f, 0.40f, 0.035f), _chrome, withCollider: false);
 
             var wheel = wheelRoot.AddComponent<SteeringWheel>();
             wheel.vehicle = controller;
@@ -744,7 +749,9 @@ namespace Copilot.EditorTools
         {
             var arm = new GameObject(x < 0f ? "ArmL" : "ArmR").transform;
             arm.SetParent(parent, false);
-            arm.localPosition = new Vector3(x, 0.30f, 0.16f);
+            // y 0.38（不是 0.30）：方向盘抬到 1.00 之后，手要跟着上去才**搭在盘上**，
+            // 否则会出现"手在盘下方悬空"的穿模感。
+            arm.localPosition = new Vector3(x, 0.38f, 0.16f);
             arm.localRotation = Quaternion.Euler(-20f, 0f, x < 0f ? -6f : 6f);
 
             // 上臂：从肩往前下方
@@ -961,7 +968,8 @@ namespace Copilot.EditorTools
 
             var cockpit = go.AddComponent<CockpitCamera>();
             cockpit.allowLook = true;
-            cockpit.restYaw = -12f;
+            // -15°（原 -12°）：多给驾驶位一点视野，让方向盘露出来；再大就会"斜着开车"，得不偿失
+            cockpit.restYaw = -15f;
         }
 
         static GameObject CreateRig(GameObject car, RoadGeometry road, VenueKind venue)
@@ -1105,33 +1113,36 @@ namespace Copilot.EditorTools
                 new Color(0.6f, 0.95f, 0.7f, 1f));
 
             // 驾驶仪表：车速 + 方向盘转角
-            // 副驾视角看不到仪表盘，这两个数必须自己画 —— 否则没法判断她是不是要出事
+            // 副驾视角看不到仪表盘，这两个数必须自己画 —— 否则没法判断她是不是要出事。
+            // ⚠️ 布局踩过的坑（用户实测"没有方向盘和转弯角度"）：原来转角行贴在**屏幕最底边**（y 0~34），
+            //    和 km/h、速度条挤在同一行、字号 20 —— 基本看不见。现在**把转角单独排到车速读数上方**，
+            //    轨道 + 滑块 + 22px 读数各占一行，且整块从底边上移。
             var speedLabel = NewText("SpeedLabel", root, "0", 56, TextAnchor.LowerRight,
-                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-190f, 66f), new Vector2(-40f, 146f), Color.white);
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-300f, 44f), new Vector2(-40f, 124f), Color.white);
 
-            NewText("SpeedCaption", root, "km/h", 20, TextAnchor.LowerRight,
-                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 36f), new Vector2(-192f, 72f),
-                new Color(1f, 1f, 1f, 0.7f));
+            NewText("SpeedCaption", root, "km/h", 22, TextAnchor.LowerRight,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-380f, 10f), new Vector2(-306f, 46f),
+                new Color(1f, 1f, 1f, 0.85f));
 
             var speedBarBg = NewImage("SpeedBarBg", root, new Color(0f, 0f, 0f, 0.55f));
-            Anchor(speedBarBg.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 22f), new Vector2(-40f, 42f));
+            Anchor(speedBarBg.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-300f, 12f), new Vector2(-40f, 34f));
 
             var speedBar = NewImage("SpeedBar", root, new Color(0.45f, 0.8f, 1f, 1f));
-            Anchor(speedBar.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 22f), new Vector2(-40f, 42f));
+            Anchor(speedBar.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-300f, 12f), new Vector2(-40f, 34f));
             speedBar.type = Image.Type.Filled;
             speedBar.fillMethod = Image.FillMethod.Horizontal;
             speedBar.fillAmount = 0f;
 
-            // 方向盘转角：一条轨道 + 一个滑块，中心 = 回正
+            // 方向盘转角：读数一行 + 轨道/滑块一行，中心 = 回正
+            var steerLabel = NewText("SteerLabel", root, "方向回正", 22, TextAnchor.LowerRight,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-520f, 164f), new Vector2(-40f, 196f),
+                new Color(1f, 0.9f, 0.7f, 1f));
+
             var steerTrack = NewImage("SteerTrack", root, new Color(0f, 0f, 0f, 0.55f));
-            Anchor(steerTrack.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-260f, 6f), new Vector2(-40f, 26f));
+            Anchor(steerTrack.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-300f, 138f), new Vector2(-40f, 158f));
 
             var steerKnob = NewImage("SteerKnob", root, new Color(1f, 0.85f, 0.4f, 1f));
-            Anchor(steerKnob.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-156f, 0f), new Vector2(-144f, 32f));
-
-            var steerLabel = NewText("SteerLabel", root, "方向回正", 20, TextAnchor.LowerRight,
-                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-470f, 4f), new Vector2(-266f, 34f),
-                new Color(1f, 0.9f, 0.7f, 1f));
+            Anchor(steerKnob.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-156f, 132f), new Vector2(-144f, 164f));
 
             var bubble = rig.AddComponent<DialogueBubble>();
             bubble.connection = rig.GetComponent<CopilotConnection>();
@@ -1166,6 +1177,10 @@ namespace Copilot.EditorTools
             driveHud.steerKnob = steerKnob.rectTransform;
             driveHud.steerLabel = steerLabel;
             driveHud.maxWheelAngle = driveHud.steeringWheel != null ? driveHud.steeringWheel.maxAngle : 180f;
+            // 速度条按**这份物理档案的上限**归一化。原来用的是 DriveHud 的默认值 160 ——
+            // 训练场只跑到 15km/h 时条几乎纹丝不动，等于"没有速度显示"。
+            var physics = driveHud.vehicle != null ? driveHud.vehicle.profile : null;
+            driveHud.maxSpeedKmh = physics != null ? physics.maxSpeedKmh : 60f;
 
             // ---- 玩法层 UI：警告横幅 / 实时分数 / 结算面板 ----
 
@@ -1491,6 +1506,11 @@ namespace Copilot.EditorTools
                 Requires(driveHud.speedLabel != null, "DriveHud.speedLabel 未连", problems);
                 Requires(driveHud.steerKnob != null && driveHud.steerTrack != null, "DriveHud 转角滑块/轨道未连", problems);
                 Requires(driveHud.steerLabel != null, "DriveHud.steerLabel 未连", problems);
+
+                // 速度条按档案上限归一化 —— 对不上时车速 15km/h 而条按 160 归一化，等于"速度条看不出动"
+                var prof = driveHud.vehicle != null ? driveHud.vehicle.profile : null;
+                Requires(prof == null || driveHud.maxSpeedKmh >= prof.maxSpeedKmh * 0.99f,
+                    "DriveHud.maxSpeedKmh 小于车辆档案的上限（速度条会几乎不动）", problems);
             }
 
             var tutorial = FindInScene<TutorialDirector>(scene);

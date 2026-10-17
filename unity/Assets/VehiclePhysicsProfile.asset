@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxSteerAngle: 32
   steerLerpSpeed: 8
-  motorTorque: 700
+  motorTorque: 500
   brakeTorque: 3500
-  maxSpeedKmh: 40
+  maxSpeedKmh: 15
   throttleCurve:
     serializedVersion: 2
     m_Curve:

@@ -70,6 +70,26 @@ public class ActionLimitsTests
         Assert.True(ActionLimits.Canonical(Intents.TurnRight).Steering > 0f, "TURN_RIGHT 必须是正转向");
     }
 
+    // ---- 目标速度归代码（意图集承接不了「5km/h」这个数，所以从原话里抽）----
+
+    [Theory]
+    [InlineData("用5km/h的速度行驶", 5)]
+    [InlineData("用 5 km/h 行驶", 5)]
+    [InlineData("开5公里", 5)]
+    [InlineData("保持20公里每小时", 20)]
+    [InlineData("30km", 30)]
+    [InlineData("12千米", 12)]
+    [InlineData("200公里", 120)]      // 夹到上限
+    // 不是速度的说法 → 必须抽成 0，否则会把「前面5米」当成定速 5
+    [InlineData("慢一点", 0)]
+    [InlineData("前面5米有个坑", 0)]
+    [InlineData("前面路口左转", 0)]
+    [InlineData("", 0)]
+    public void 从原话抽目标速度(string text, int expected)
+    {
+        Assert.Equal(expected, Intents.ParseTargetSpeedKmh(text));
+    }
+
     [Theory]
     [InlineData("向左变道", -1)]
     [InlineData("往左开", -1)]

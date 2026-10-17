@@ -21,6 +21,9 @@ namespace Copilot.Vehicle
         [Tooltip("下发插值速率：满量程所需毫秒数")]
         public float rampMs = 150f;
 
+        [Tooltip("定速：玩家原话里带速度（「5km/h」「20 公里」）时由代码闭环保持；关掉就只认油门/刹车指令")]
+        public bool cruiseEnabled = true;
+
         DriveAction _target;
         float _elapsedMs;
         bool _active;
@@ -65,7 +68,29 @@ namespace Copilot.Vehicle
 
         void HandleTurnEvent(TurnEvent evt)
         {
-            if (evt == null || evt.Kind != TurnEventKind.DriveAction || evt.Action == null) return;
+            if (evt == null) return;
+
+            // 定速归代码：意图集里没有任何一个能承接「5km/h」这个数，所以从**原话**里抽
+            // （与「方向判定归代码」同一思路）。识别文本在 AsrFinal 上，值交给 VehicleController 闭环保持。
+            if (evt.Kind == TurnEventKind.AsrFinal)
+            {
+                if (!cruiseEnabled || vehicle == null) return;
+                int target = Intents.ParseTargetSpeedKmh(evt.Text);
+                if (target > 0) vehicle.SetTargetSpeed(target);
+                return;
+            }
+
+            if (evt.Kind != TurnEventKind.DriveAction || evt.Action == null) return;
+
+            // 刹车 / 停车 / 拒绝（危险指令）→ 退出定速：玩家在要减速，别跟她抢
+            if (cruiseEnabled && vehicle != null
+                && (evt.Action.Intent == Intents.Brake
+                    || evt.Action.Intent == Intents.Park
+                    || evt.Action.Intent == Intents.Ignore))
+            {
+                vehicle.ClearTargetSpeed();
+            }
+
             Execute(evt.Action);
         }
 
@@ -92,6 +117,7 @@ namespace Copilot.Vehicle
             _throttle = 0f;
             _brake = 0f;
             Current = null;
+            if (vehicle != null) vehicle.ClearTargetSpeed();
         }
 
         void FixedUpdate()
