@@ -426,8 +426,11 @@ public static class Cli
 
     private static bool IsPttKeyDown() => (GetAsyncKeyState(VkSpace) & 0x8000) != 0;
 
-    /// <summary>直接让妹妹说一句（走 TTS 双路由），用于在无 ASR 时验证音频输出链路。</summary>
-    public static void RunPlay(AiRuntime runtime, string text)
+    /// <summary>
+    /// 直接让她说一句（走 TTS 双路由），用于在无 ASR 时验证音频输出链路。
+    /// 给了 <paramref name="outPath"/> 就**写成 wav 文件而不占声卡** —— 用来做「同一句话、不同音色」的 A/B 试听。
+    /// </summary>
+    public static void RunPlay(AiRuntime runtime, string text, string? outPath = null)
     {
         var result = runtime.Tts.Route(null, text, Intents.QuestionBack, runtime.Pipeline.Trust.Emotion);
         if (result.Pcm16 == null)
@@ -437,6 +440,14 @@ public static class Cli
         }
 
         Console.WriteLine($"小雅> {result.Text}");
+
+        if (outPath != null)
+        {
+            AudioIo.SaveWav16(outPath, result.Pcm16, result.SampleRate);
+            Console.WriteLine($"  [TTS ] ({(result.FromVoiceLib ? "语音库" : "实时合成")}) 已写出 {outPath}（{result.Pcm16.Length / 2 / (double)result.SampleRate:0.00}s）");
+            return;
+        }
+
         Console.WriteLine($"  [TTS ] ({(result.FromVoiceLib ? "语音库" : "实时合成")}) 回放 {result.Pcm16.Length / 2 / (double)result.SampleRate:0.00}s…");
         AudioIo.Play(result.Pcm16, result.SampleRate);
     }

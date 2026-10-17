@@ -615,6 +615,57 @@ public class TutorialProgressTests
         Assert.Equal(0, progress.StepIndex);
     }
 
+    // ---- 「明明往右拐了却通不过」（用户实测反馈）：转弯步与变道步互相收对方的意图，只把方向当硬约束 ----
+
+    [Fact]
+    public void 右转这一步_说成变道但方向对也算过()
+    {
+        // 实测：LLM 把「向右打一点」「向右向右一直把方向打」归成 LANE_CHANGE（steering=+0.30），
+        // 而车**物理上确实往右拐了** —— 玩家眼里这就是右转。这一步只收 TURN_RIGHT 的话就会卡死。
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 3; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        Assert.Equal("右转", progress.Current!.Title);
+        Assert.Equal(TutorialObservation.Advanced, progress.Observe(Intents.LaneChange, 1));
+        Assert.Equal("向左变道", progress.Current!.Title);
+    }
+
+    [Fact]
+    public void 右转这一步_反方向照样拦()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 3; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        // 左转意图不在本步的可接受列表里 → 动作不对
+        Assert.Equal(TutorialObservation.WrongIntent, progress.Observe(Intents.TurnLeft, -1));
+        // 变道意图在列表里，但方向是左 → 方向不对
+        Assert.Equal(TutorialObservation.WrongDirection, progress.Observe(Intents.LaneChange, -1));
+        Assert.Equal("右转", progress.Current!.Title);   // 两种都不推进
+    }
+
+    [Fact]
+    public void 向右变道这一步_说成转弯但方向对也算过()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 5; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        Assert.Equal("向右变道", progress.Current!.Title);
+        Assert.Equal(TutorialObservation.WrongDirection, progress.Observe(Intents.TurnRight, -1));
+        Assert.Equal(TutorialObservation.Advanced, progress.Observe(Intents.TurnRight, 1));
+    }
+
     [Fact]
     public void 教学关拆成九步_覆盖issue要求的练习序列()
     {

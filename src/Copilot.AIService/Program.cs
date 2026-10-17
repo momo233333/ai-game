@@ -74,7 +74,7 @@ public static class Program
         var play = GetOption(args, "--play");
         if (play != null)
         {
-            Cli.RunPlay(runtime, play);
+            Cli.RunPlay(runtime, play, GetOption(args, "--out"));
             return 0;
         }
 
@@ -126,6 +126,7 @@ public static class Program
           --speak                配合 --wav/--mic：把妹妹的语音放出来
           --vad <文件>            VAD 诊断：报告语音帧占比 / 语音突起次数 / 检出句尾（无麦克风也能验）
           --play "<台词>"        直接让妹妹说一句（验证音频输出链路）
+          --out <wav>            配合 --play：写成 wav 文件而不放音（做"同一句话不同音色"A/B 试听用）
           --synth-voicelib       用当前实时合成引擎**重录** voice-corpus 的 71 条台词（保证与自由句同嗓门）
           --server               启动本地 gRPC 服务（供 Unity 接入）
           --health               打印后端装配与降级状态后退出

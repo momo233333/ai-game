@@ -100,20 +100,22 @@ namespace Copilot.Core.Levels
                     0, Intents.Accelerate),
 
                 new TutorialStep("左转", "到头有弯，让她提前打方向往左拐。", "前面左转",
-                    "车头真的朝左偏", "她的方向没往左 —— 再说一遍「前面左转」。",
-                    -1, Intents.TurnLeft),
+                    "车头真的朝左偏（你说「左转」或「向左打一点」都算）",
+                    "她没往左 —— 说「前面左转」或者「向左打一点方向」。",
+                    -1, Intents.TurnLeft, Intents.LaneChange),
 
                 new TutorialStep("右转", "折回来，让她往右拐。", "向右拐",
-                    "车头真的朝右偏", "她没往右拐 —— 说「向右拐」。",
-                    1, Intents.TurnRight),
+                    "车头真的朝右偏（你说「右转」或「向右打一点」都算）",
+                    "她没往右 —— 说「向右拐」或者「向右打一点方向」。",
+                    1, Intents.TurnRight, Intents.LaneChange),
 
                 new TutorialStep("向左变道", "让她往左挪一条道。变道本身不带左右，方向靠你原话说清。", "向左变道",
                     "真的往左挪（转向为负）", "她挪反了方向 —— 变道时把「左」说清楚。",
-                    -1, Intents.LaneChange),
+                    -1, Intents.LaneChange, Intents.TurnLeft),
 
                 new TutorialStep("向右变道", "这回往右挪一条道。", "向右变道",
                     "真的往右挪（转向为正）", "她挪反了方向 —— 说「向右变道」。",
-                    1, Intents.LaneChange),
+                    1, Intents.LaneChange, Intents.TurnRight),
 
                 new TutorialStep("减速", "到停止线前，让她把速度降下来。", "减速",
                     "刹车真的踩下去了", "她要的是减速 —— 说「减速」或「慢一点」。",
@@ -168,9 +170,18 @@ namespace Copilot.Core.Levels
     /// 纯逻辑、无 Unity 依赖，可单测 —— 关卡规则属于游戏设计，不该埋在 MonoBehaviour 里。
     /// 规则：**必须按当前这一步要求的动作来，做别的（包括没听清的反问、被拒绝的 IGNORE）一律不推进、不倒退。**
     ///
-    /// 方向校验只在<b>步骤要求方向</b>时生效（目前只有「向左/向右变道」两处）。
+    /// 方向校验只在<b>步骤要求方向</b>时生效（目前只有「左/右转」「向左/向右变道」四处）。
     /// **方向不明时放行** —— 玩家可能只说「变道」而没说左右，不该卡住教学；
     /// 只有**明确报错方向**（车真的往反方向偏）才算 <see cref="TutorialObservation.WrongDirection"/>。
+    ///
+    /// ⚠️ **这四步的 AcceptIntents 是故意放宽的（实测反馈"明明往右拐了却通不过"）**：
+    /// LLM 会把「向右打一点」「向右向右一直把方向打」这类**口语**归成 <c>LANE_CHANGE</c>
+    /// （实测：`向右打一点 → ⇄变道 steering=+0.30`），而车**物理上确实往右拐了** ——
+    /// 玩家眼里这就是"右转"，关卡却判「动作不对」，于是卡住。
+    /// 所以转弯步也收 <c>LANE_CHANGE</c>、变道步也收对应的 <c>TURN_*</c>：
+    /// **只把"往哪边"当硬约束，不纠结玩家把这叫转弯还是叫打方向。**
+    /// 代价是「转弯」与「变道」两步在判据上区分度变低（只剩方向与顺序），
+    /// 但这比"她把车拐过去了却不给过"要好 —— 教学关是练习场，别跟玩家的措辞较真。
     /// </summary>
     public sealed class TutorialProgress
     {

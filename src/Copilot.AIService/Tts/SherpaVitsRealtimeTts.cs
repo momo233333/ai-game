@@ -13,6 +13,8 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
 {
     private readonly OfflineTts _tts;
     private readonly int _targetSampleRate;
+    /// <summary>多说话人模型选哪个嗓音（见 <c>Config.TtsOptions.VitsOptions.SpeakerId</c>）。</summary>
+    private readonly int _speakerId;
 
     public string Name => "sherpa-vits";
     public bool IsAvailable => true;
@@ -24,10 +26,11 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
     /// </summary>
     public int SampleRate => _targetSampleRate;
 
-    private SherpaVitsRealtimeTts(OfflineTts tts, int targetSampleRate)
+    private SherpaVitsRealtimeTts(OfflineTts tts, int targetSampleRate, int speakerId)
     {
         _tts = tts;
         _targetSampleRate = targetSampleRate;
+        _speakerId = speakerId < 0 ? 0 : speakerId;
     }
 
     public static SherpaVitsRealtimeTts? TryCreate(Config.TtsOptions.VitsOptions options, string modelsDir,
@@ -68,7 +71,7 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
             config.MaxNumSentences = 1;
 
             reason = string.Empty;
-            return new SherpaVitsRealtimeTts(new OfflineTts(config), targetSampleRate);
+            return new SherpaVitsRealtimeTts(new OfflineTts(config), targetSampleRate, options.SpeakerId);
         }
         catch (Exception ex)
         {
@@ -83,7 +86,7 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
 
         try
         {
-            var audio = _tts.Generate(text, 1.0f, 0);
+            var audio = _tts.Generate(text, 1.0f, _speakerId);
             try
             {
                 var pcm = ToPcm16(audio.Samples);

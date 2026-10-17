@@ -107,6 +107,13 @@ public sealed class Config
             public string Tokens { get; set; } = "vits-zh/tokens.txt";
             public string Lexicon { get; set; } = "vits-zh/lexicon.txt";
 
+            /// <summary>
+            /// **多说话人模型**里选哪个嗓音（0 起）；单说话人模型（如 melo-tts）忽略它。
+            /// 原来这里被写死成 0 —— 于是换成 theresa/eula/aishell3 这类有几百个说话人的中文模型时，
+            /// 只能听 sid 0，没法挑音色。改成可配的，换音色就不用再改代码。
+            /// </summary>
+            public int SpeakerId { get; set; }
+
             /// <summary>中文分词词典目录（melo-tts 等用 jieba，缺了会把中文读错）；piper 类模型不需要。</summary>
             public string? DictDir { get; set; }
 
