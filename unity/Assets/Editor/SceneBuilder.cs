@@ -18,28 +18,44 @@ using UnityEngine.UI;
 namespace Copilot.EditorTools
 {
     /// <summary>
-    /// 生成「开箱可玩」的场景（P8 灰盒 → P9 街道）。
+    /// 生成「开箱可玩」的场景。
     ///
     /// 为什么用代码生成而不是手搭：手搭一次要挂十来个组件、连二十来处引用，还容易漏；
-    /// 生成器是可重跑的**代码**，改一处结构重新生成即可。美术资产到位后也只改
-    /// <c>CreateVehicle</c>/<c>CreateCity</c>，装配与 UI 逻辑不用动。
+    /// 生成器是可重跑的**代码**，改一处结构重新生成即可。
     ///
-    /// 产物：`Assets/Scenes/Greybox.unity`
-    /// - `City`：路面 + 车道线 + 人行道 + 路口 + 楼群 + 路灯 + 锥桶 + 路边停车
+    /// **场地有两种（`VenueKind`）**：
+    /// - `TrainingGround`（默认，写 `Assets/Scenes/Greybox.unity`）：**封闭低速的驾校练习场** ——
+    ///   水泥场地 + 直线练习道 + 直角弯区 + 倒车入库位 + 侧方停车位 + S 弯 + 围栏。
+    ///   科目一教学关用它（issue #2：新手不该一上来就被扔进大马路）。
+    /// - `MainRoad`（备用菜单，写 `Assets/Scenes/Road.unity`）：原来的 4 车道城市马路 + 路口 + 楼群 + 路灯 + 路边停车。
+    ///   **留给科目三**，平时不生成 —— 那些数值是踩坑换来的（例如「标线 y 必须 > 0.012，否则埋进沥青里看不见」），不要删。
+    ///
+    /// 产物（以训练场为例）：
+    /// - `TrainingGround`：场地 + 练习道标线 + 库位 + 围栏 + 锥桶 + `RoadGeometry`
     /// - `Car`：Rigidbody + 4×WheelCollider + `VehicleController`（`VehiclePhysicsProfile` 资产）
-    /// - `Main Camera`：`ChaseCamera` 跟随
+    /// - 相机：`CockpitCamera`（第一人称副驾座，是 `Car` 的子物体）
     /// - `CopilotRig`：`CopilotConnection` + 执行/状态/音频/UI 全套 + `CopilotBootstrap`
-    /// - `HUD`：信任条 / 情绪 / 字幕 / 飘条 / 录音指示（UGUI，无需 TextMeshPro）
+    /// - `HUD`：信任条 / 情绪 / 字幕 / 飘条 / 教学步骤 / 仪表 / 玩法横幅（UGUI，无需 TextMeshPro）
     ///
     /// 用法（编辑器菜单或 batchmode）：
-    /// - `副驾指令 / 生成灰盒场景`      → `SceneBuilder.BuildAndExit`
-    /// - `副驾指令 / 校验灰盒场景`      → `SceneBuilder.ValidateAndExit`（断言引用都连上了）
-    /// - `副驾指令 / 渲染场景预览图`    → `SceneBuilder.CaptureAndExit`（渲一张 PNG，供人/CI 看画面）
+    /// - `副驾指令 / 生成灰盒场景`            → `SceneBuilder.BuildAndExit`（训练场）
+    /// - `副驾指令 / 生成主路场景（备用）`    → 写 `Road.unity`，供科目三
+    /// - `副驾指令 / 校验灰盒场景`            → `SceneBuilder.ValidateAndExit`（断言引用都连上了）
+    /// - `副驾指令 / 渲染场景预览图`          → `SceneBuilder.CaptureAndExit`（渲 PNG，供人/CI 看画面）
     /// </summary>
     public static class SceneBuilder
     {
+        /// <summary>场地类型。默认训练场；主路留给科目三，靠备用菜单生成。</summary>
+        public enum VenueKind
+        {
+            TrainingGround,
+            MainRoad,
+        }
+
         const string SceneDir = "Assets/Scenes";
         const string ScenePath = SceneDir + "/Greybox.unity";
+        /// <summary>主路场景（备用，科目三用）—— 平时不生成、不占 Build Settings。</summary>
+        const string MainRoadScenePath = SceneDir + "/Road.unity";
         const string ProfilePath = "Assets/VehiclePhysicsProfile.asset";
         const string PreviewRelativePath = "logs/unity_scene_preview.png";
         const string DriverPreviewRelativePath = "logs/unity_scene_preview_driver.png";
@@ -51,16 +67,30 @@ namespace Copilot.EditorTools
         /// <summary>固定随机种子：每次生成的楼群/道具布局完全一致，便于对比与回归。</summary>
         const int Seed = 20261011;
 
-        // 路面参数（车辆与道具都按这些摆放，改这里就整体改）
+        // 路面参数（车辆与道具都按这些摆放，改这里就整体改）—— **主路场地专用**
         const float RoadHalfWidth = 8f;
         const float RoadLength = 360f;
         const float RoadCenterZ = 120f;
-        const float LaneMarkZ = 0.5f;
         const float CrossZ = 120f;
         const float CrossHalfWidth = 8f;
 
+        // ---- 训练场参数（科目一练习场：封闭、低速、无车流）----------------------
+        // 场地是一大块水泥地；车道标线画在 x = ±3.6 / 0（三条直线练习道），
+        // 尽头是直角弯区（复用 RoadGeometry.crossCenterZ 表达「进弯就不判横向偏移」）。
+        const float YardHalfWidth = 32f;      // x 半宽 → 场地宽 64m（库位在 ±16、S 弯到 ±28，都放得下；
+        //                                      收窄是为了让围栏近一点 —— 90m 宽时开局镜头根本看不见边界，"封闭感"就没了）
+        const float YardLength = 240f;        // z 长度
+        const float YardCenterZ = 80f;        // 场地中心 z
+        const float YardMarkY = 0.012f;       // 标线高度：必须**高于**地面顶面（y=0），否则埋进水泥里看不见 —— 踩过
+        const float YardLaneCenterX = 3.6f;   // 右侧车道中心 —— 车就从这里起步
+        const float StraightEndZ = 92f;       // 直线练习道尽头（停止线）
+        const float TurnZoneZ = 112f;         // 直角弯区中心（= RoadGeometry.crossCenterZ）
+        const float TurnZoneHalf = 12f;       // 弯区半宽
+        const float BayWidth = 6f;            // 倒车入库位宽
+        const float BayDepth = 12f;           // 倒车入库位深
+
         // 共用材质（一次构建内复用，避免几百个材质实例）
-        static Material _road, _laneSolid, _laneDash, _sidewalk, _curb;
+        static Material _road, _laneSolid, _laneDash, _sidewalk, _curb, _pad, _fence;
         static Material _bldA, _bldB, _bldC, _window, _roof;
         static Material _pole, _lamp;
         static Material _body, _glass, _tire, _rim, _lightFront, _lightRear, _cone;
@@ -69,12 +99,18 @@ namespace Copilot.EditorTools
         static Material _eyeWhite, _pupil, _brow, _lip, _shoe, _collar;
 
         [MenuItem("副驾指令/生成灰盒场景")]
-        public static void BuildFromMenu()
+        public static void BuildFromMenu() => BuildFromMenu(VenueKind.TrainingGround);
+
+        [MenuItem("副驾指令/生成主路场景（备用，科目三用）")]
+        public static void BuildMainRoadFromMenu() => BuildFromMenu(VenueKind.MainRoad);
+
+        static void BuildFromMenu(VenueKind venue)
         {
-            Build();
+            Build(venue);
             AssetDatabase.SaveAssets();
-            EditorSceneManager.OpenScene(ScenePath);
-            Debug.Log("[SceneBuilder] 已生成并打开 " + ScenePath);
+            string path = VenuePath(venue);
+            EditorSceneManager.OpenScene(path);
+            Debug.Log("[SceneBuilder] 已生成并打开 " + path);
         }
 
         [MenuItem("副驾指令/校验灰盒场景")]
@@ -90,7 +126,12 @@ namespace Copilot.EditorTools
             Debug.Log("[SceneBuilder] 预览图：" + png);
         }
 
-        public static void BuildAndExit() => RunAndExit(Build);
+        static string VenuePath(VenueKind venue)
+            => venue == VenueKind.MainRoad ? MainRoadScenePath : ScenePath;
+
+        public static void BuildAndExit() => RunAndExit(() => Build());
+        /// <summary>生成主路场景（备用，科目三用）。</summary>
+        public static void BuildMainRoadAndExit() => RunAndExit(() => Build(VenueKind.MainRoad));
         public static void ValidateAndExit() => RunAndExit(Validate);
         public static void CaptureAndExit() => RunAndExit(() => Capture());
 
@@ -112,7 +153,10 @@ namespace Copilot.EditorTools
 
         // ---------------------------------------------------------------- 生成
 
-        public static void Build()
+        /// <summary>生成默认场地（训练场）到 <c>Greybox.unity</c>。</summary>
+        public static void Build() => Build(VenueKind.TrainingGround);
+
+        public static void Build(VenueKind venue)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -121,22 +165,29 @@ namespace Copilot.EditorTools
             CreateLight();
 
             var profile = EnsureProfile();
-            var city = CreateCity();
-            var car = CreateVehicle(profile, city.transform);   // 相机随车一起建（第一人称副驾座）
-            var rig = CreateRig(car, city.GetComponent<RoadGeometry>());
+            var ground = venue == VenueKind.MainRoad ? CreateMainRoadVenue() : CreateTrainingGround();
+            // 起步位置要落在**某条车道的中心线上**：训练场是 3 条练习道（中心 ±3.6/0），主路是 4 条（中心 ±1.8/±5.4）
+            float startX = venue == VenueKind.MainRoad ? 1.8f : YardLaneCenterX;
+            var car = CreateVehicle(profile, ground.transform, startX);   // 相机随车一起建（第一人称副驾座）
+            var rig = CreateRig(car, ground.GetComponent<RoadGeometry>(), venue);
             CreateHud(rig);
 
             if (!AssetDatabase.IsValidFolder(SceneDir))
             {
                 AssetDatabase.CreateFolder("Assets", "Scenes");
             }
-            bool saved = EditorSceneManager.SaveScene(scene, ScenePath);
-            if (!saved) throw new InvalidOperationException("场景保存失败：" + ScenePath);
 
-            // 写进 Build Settings，免得以后打包时「一个场景都没有」
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            string path = VenuePath(venue);
+            bool saved = EditorSceneManager.SaveScene(scene, path);
+            if (!saved) throw new InvalidOperationException("场景保存失败：" + path);
 
-            Debug.Log("[SceneBuilder] 场景已生成：" + ScenePath);
+            // **只有默认场地写进 Build Settings** —— 主路是备用场景，别让它抢掉默认启动场景
+            if (venue == VenueKind.TrainingGround)
+            {
+                EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            }
+
+            Debug.Log("[SceneBuilder] 场景已生成：" + path + "（场地 " + venue + "）");
         }
 
         static void CreatePalette()
@@ -146,6 +197,8 @@ namespace Copilot.EditorTools
             _laneDash = MakeMaterial(new Color(0.92f, 0.92f, 0.88f));
             _sidewalk = MakeMaterial(new Color(0.55f, 0.55f, 0.54f));
             _curb = MakeMaterial(new Color(0.72f, 0.72f, 0.70f));
+            _pad = MakeMaterial(new Color(0.44f, 0.45f, 0.47f));     // 训练场水泥地
+            _fence = MakeMaterial(new Color(0.56f, 0.58f, 0.61f));   // 围栏
 
             _bldA = MakeMaterial(new Color(0.62f, 0.60f, 0.58f));
             _bldB = MakeMaterial(new Color(0.48f, 0.50f, 0.54f));
@@ -223,7 +276,144 @@ namespace Copilot.EditorTools
 
         // ---- 场景几何 -------------------------------------------------
 
-        static GameObject CreateCity()
+        /// <summary>
+        /// **训练场（科目一，默认场地）**：封闭、低速、无车流的驾校练习场。
+        ///
+        /// 布局（x 向右、z 向前，场地 90×240）：
+        /// - 水泥场地 `Ground` + 四周围栏 `Fence`
+        /// - 三条直线练习道（标线 `LaneMark`，车道中心 x = −3.6 / 0 / +3.6），从 z=−20 到停止线 z=92
+        /// - 停止线 `StopLine`（z=92）与尽头横向练习道 —— 左边/右边真有弯可拐
+        /// - 左侧两个**倒车入库位**、右侧两个**侧方停车位**（`BayLine`）
+        /// - 右后区用锥桶摆一条 S 弯（纯观感，不做判定）
+        /// - `HazardCar`（「忘了刹车」用，默认不激活）
+        ///
+        /// 动机（issue #2）：新手第一课不该被直接扔进 4 车道大马路。
+        /// </summary>
+        static GameObject CreateTrainingGround()
+        {
+            var yard = new GameObject("TrainingGround");
+            var parent = yard.transform;
+
+            // 水泥地：y = −0.5 让**顶面正好落在 y = 0**（与主路一致，车轮不会陷进去）
+            Box("Ground", parent, new Vector3(0f, -0.5f, YardCenterZ),
+                new Vector3(YardHalfWidth * 2f, 1f, YardLength), _pad);
+
+            CreateFence(parent);
+            CreateTrainingLanes(parent);
+            CreateParkingBays(parent);
+            CreateTrainingCones(parent);
+            CreateHazardCar(parent);
+
+            // 道路几何的**唯一真源**（玩法检测要用）。
+            // 训练场里 `laneCenterXs` = 三条直线练习道的中心；
+            // `crossCenterZ` 从「路口」泛化成「**弯道/交叉练习区中心**」—— 进弯区就不判横向偏移
+            // （`VehicleSensors` 的那套判据天然适用，见 RoadGeometry 注释）。
+            var road = yard.AddComponent<RoadGeometry>();
+            road.roadForward = Vector3.forward;
+            road.laneCenterXs = new[] { -3.6f, 0f, 3.6f };
+            road.laneWidthM = 3.6f;
+            road.crossCenterZ = TurnZoneZ;
+            road.crossHalfExtentM = TurnZoneHalf;
+
+            return yard;
+        }
+
+        /// <summary>四周围栏 —— 把练习场圈起来，一眼就是"封闭场地"。</summary>
+        static void CreateFence(Transform parent)
+        {
+            const float h = 1.6f;
+            const float t = 0.3f;
+            float halfW = YardHalfWidth + 1.5f;
+            float z0 = YardCenterZ - YardLength / 2f;
+            float z1 = YardCenterZ + YardLength / 2f;
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Box("Fence", parent, new Vector3(side * halfW, h / 2f, YardCenterZ),
+                    new Vector3(t, h, YardLength + 3f), _fence);
+            }
+            for (int end = -1; end <= 1; end += 2)
+            {
+                Box("Fence", parent, new Vector3(0f, h / 2f, end < 0 ? z0 : z1),
+                    new Vector3(halfW * 2f + t, h, t), _fence);
+            }
+        }
+
+        /// <summary>
+        /// 直线练习道标线 + 停止线 + 尽头横向练习道。
+        /// ⚠️ 标线一律 **`withCollider: false`** —— 它们是"漆"，不是障碍物：
+        /// 带碰撞体会让车轮在 2cm 高的薄片上颠一下，而且每次接触都可能被当成撞车。
+        /// </summary>
+        static void CreateTrainingLanes(Transform parent)
+        {
+            const float zStart = -20f;
+            float len = StraightEndZ - zStart;               // z ∈ [−20, 92]
+            float midZ = (StraightEndZ + zStart) / 2f;
+
+            // 车道分隔虚线（x = ±1.8）+ 两侧边线（x = ±5.4）→ 车道中心 −3.6 / 0 / +3.6
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Box("LaneMark", parent, new Vector3(side * 1.8f, YardMarkY, midZ),
+                    new Vector3(0.16f, 0.02f, len), _laneDash, withCollider: false);
+                Box("LaneMark", parent, new Vector3(side * 5.4f, YardMarkY, midZ),
+                    new Vector3(0.18f, 0.02f, len), _laneSolid, withCollider: false);
+            }
+
+            // 停止线：减速这一步的视觉锚点
+            Box("StopLine", parent, new Vector3(0f, YardMarkY, StraightEndZ),
+                new Vector3(11.2f, 0.02f, 0.6f), _laneSolid, withCollider: false);
+
+            // 尽头横向练习道：左转/右转完真的有路可走（也让 `crossCenterZ` 在画面上说得通）
+            Box("LaneMark", parent, new Vector3(0f, YardMarkY, TurnZoneZ),
+                new Vector3(YardHalfWidth * 1.5f, 0.02f, 0.16f), _laneDash, withCollider: false);
+        }
+
+        /// <summary>倒车入库位（左侧两个）+ 侧方停车位（右侧两个），都是画出来的库位边框。</summary>
+        static void CreateParkingBays(Transform parent)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                float z = 30f + i * 18f;
+                CreateBayOutline(parent, new Vector3(-16f, 0f, z), BayWidth, BayDepth);   // 倒车入库
+                CreateBayOutline(parent, new Vector3(14f, 0f, z), BayWidth, 8f);           // 侧方停车
+            }
+        }
+
+        /// <summary>库位边框（四条边线）。同样不带碰撞体。</summary>
+        static void CreateBayOutline(Transform parent, Vector3 center, float width, float depth)
+        {
+            const float t = 0.14f;
+            float hw = width / 2f;
+            float hd = depth / 2f;
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Box("BayLine", parent, new Vector3(center.x + side * hw, YardMarkY, center.z),
+                    new Vector3(t, 0.02f, depth), _laneSolid, withCollider: false);
+                Box("BayLine", parent, new Vector3(center.x, YardMarkY, center.z + side * hd),
+                    new Vector3(width, 0.02f, t), _laneSolid, withCollider: false);
+            }
+        }
+
+        /// <summary>S 弯：两排锥桶摆出的曲线路径（纯观感，不做判定）。</summary>
+        static void CreateTrainingCones(Transform parent)
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                float z = 108f + i * 13f;
+                float wobble = Mathf.Sin(i * 1.1f) * 6f;
+                Cylinder("Cone", parent, new Vector3(22f + wobble, 0.35f, z),
+                    new Vector3(0.5f, 0.35f, 0.5f), _cone);
+            }
+        }
+
+        /// <summary>
+        /// **主路场地（备用，留给科目三）**：4 车道城市马路 + 路口 + 楼群 + 路灯 + 锥桶 + 路边停车。
+        ///
+        /// 平时不由 `BuildAndExit` 生成（走菜单「生成主路场景（备用）」），**保留是因为那些数值是踩坑换来的**
+        /// （车道分隔虚线在 x=±3.6、边线 x=±7.2 → 车道中心 ±1.8/±5.4；标线 y 必须 &gt; 0 否则埋进沥青里）。
+        /// </summary>
+        static GameObject CreateMainRoadVenue()
         {
             var city = new GameObject("City");
             var rng = new System.Random(Seed);
@@ -231,10 +421,9 @@ namespace Copilot.EditorTools
             CreateRoad(city.transform);
             CreateBuildings(city.transform, rng);
             CreateStreetLights(city.transform);
-            CreateProps(city.transform, rng);
+            CreateRoadProps(city.transform, rng);
+            CreateHazardCar(city.transform);
 
-            // 道路几何的**唯一真源**（玩法检测要用）：车道中心/宽度/路口范围。
-            // 数值必须与上面的标线一致（虚线 x=±3.6、边线 x=±7.2 → 车道中心 ±1.8/±5.4）。
             var road = city.AddComponent<RoadGeometry>();
             road.roadForward = Vector3.forward;
             road.laneCenterXs = new[] { -5.4f, -1.8f, 1.8f, 5.4f };
@@ -352,7 +541,8 @@ namespace Copilot.EditorTools
             }
         }
 
-        static void CreateProps(Transform parent, System.Random rng)
+        /// <summary>主路场地的道具（路口锥桶 + 路边停车）—— 只给科目三用。</summary>
+        static void CreateRoadProps(Transform parent, System.Random rng)
         {
             // 路口锥桶
             for (int i = 0; i < 4; i++)
@@ -370,22 +560,31 @@ namespace Copilot.EditorTools
                 parked.transform.localPosition = new Vector3(6f, 0f, z);
                 BuildCarBody(parked.transform, new Color(0.25f + 0.3f * (float)rng.NextDouble(), 0.3f, 0.55f), withWheels: true);
             }
+        }
 
-            // 「前方那辆车」（失误「忘了刹车」用）：平时藏远处且**不激活**，
-            // 由 MistakeRunner 在失误开演时才摆到车头正前方 —— 常驻会在正常教学流程里伏击玩家。
+        /// <summary>
+        /// 「前方那辆车」（失误「忘了刹车」用）：平时藏在场地外且**不激活**，
+        /// 由 `MistakeRunner` 在失误开演时才摆到车头正前方 —— 常驻会在正常教学流程里伏击玩家。
+        ///
+        /// ⚠️ **两种场地都要建**：`MistakeRunner.PlaceHazardAhead` / `Validate` / `GameplaySelfTest` 都依赖它。
+        /// </summary>
+        static void CreateHazardCar(Transform parent)
+        {
             var hazard = new GameObject("HazardCar");
             hazard.transform.SetParent(parent, false);
-            hazard.transform.localPosition = new Vector3(1.8f, 0f, RoadCenterZ + 150f);
+            // 摆在两种场地**都不在的行车范围**里（x=−120 离训练场 ±32 和主路 ±8 都很远）——
+            // 它反正总会被 PlaceHazardAhead 挪到车头正前方，这里只要保证"藏着的时候不挡路"。
+            hazard.transform.localPosition = new Vector3(-120f, 0f, YardCenterZ + YardLength / 2f);
             BuildCarBody(hazard.transform, new Color(0.62f, 0.34f, 0.30f), withWheels: true);
             hazard.SetActive(false);
         }
 
         // ---- 车辆 -----------------------------------------------------
 
-        static GameObject CreateVehicle(VehiclePhysicsProfile profile, Transform parent)
+        static GameObject CreateVehicle(VehiclePhysicsProfile profile, Transform parent, float startX)
         {
             var car = new GameObject(CarName);
-            car.transform.position = new Vector3(1.8f, 0.0f, 0f); // 靠右行驶：右内侧车道（x>0）
+            car.transform.position = new Vector3(startX, 0.0f, 0f); // 落在车道中心线上（靠右行驶 → 右车道）
 
             var body = car.AddComponent<Rigidbody>();
             body.mass = 1400f;
@@ -764,7 +963,7 @@ namespace Copilot.EditorTools
             cockpit.restYaw = -12f;
         }
 
-        static GameObject CreateRig(GameObject car, RoadGeometry road)
+        static GameObject CreateRig(GameObject car, RoadGeometry road, VenueKind venue)
         {
             var rig = new GameObject(RigName);
 
@@ -772,12 +971,17 @@ namespace Copilot.EditorTools
             var vehicle = car.GetComponent<VehicleController>();
 
             // 传感器（只测量：横向偏移 / 前方障碍距离 / 撞车）。
-            // 道路几何挂在 City 上 —— 注意车是**根物体**（CreateVehicle 的 parent 参数其实没生效），
+            // 道路几何挂在场地根物体上 —— 注意车是**根物体**（CreateVehicle 的 parent 参数其实没生效），
             // 所以不能靠 car.transform.parent 去拿，必须显式传进来。
             var sensors = car.AddComponent<VehicleSensors>();
             sensors.vehicle = vehicle;
             sensors.road = road;
             sensors.hazardCar = road != null ? road.transform.Find("HazardCar") : null;
+
+            // 封闭练习场里没有"车道"可言（车会开去倒车库位/S 弯），要关掉独立的压线上报 ——
+            // 否则**正常练一次变道**（横向偏移 > 1.0m 持续 400ms）就会被记一次压线（−6 信任 / −6 安全分），
+            // 玩家只会觉得"我明明没压线凭什么扣我分"。主路场地仍保留该判据。
+            if (venue == VenueKind.TrainingGround) sensors.standaloneLaneDeparture = false;
 
             var gameState = rig.AddComponent<GameStateManager>();
             gameState.connection = connection;
@@ -880,13 +1084,18 @@ namespace Copilot.EditorTools
                 TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(0f, 0f),
                 new Vector2(30f, 30f), new Vector2(1100f, 60f), new Color(1f, 1f, 1f, 0.6f));
 
-            // 教学关：当前步骤 + 结果播报（科目一 · 上车第一课）
-            var stepLabel = NewText("StepLabel", root, "", 24, TextAnchor.UpperLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -232f), new Vector2(900f, -108f),
+            // 教学关：当前步骤 + 结果播报（科目一 · 训练场第一课）。
+            // 从三行扩到**四行**（issue #2 要求每一步看得见「目标 / 成功条件」）：
+            // 关卡+步数 / 本节要做什么 / 目标 / 照着念。所以区域往下延长（顶部不动，
+            // 免得和上面的信任条/飘条打架），字号 24 → 22 让四行放得下。
+            var stepLabel = NewText("StepLabel", root, "", 22, TextAnchor.UpperLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -306f), new Vector2(900f, -108f),
                 new Color(0.95f, 0.97f, 1f, 0.92f));
+            stepLabel.verticalOverflow = VerticalWrapMode.Overflow;
 
-            var resultLabel = NewText("ResultLabel", root, "", 22, TextAnchor.UpperLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -272f), new Vector2(900f, -236f),
+            // 结果行：过关写"教学关完成"，做错写「动作不对 / 方向不对：为什么」（TutorialDirector 会换色）
+            var resultLabel = NewText("ResultLabel", root, "", 20, TextAnchor.UpperLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -348f), new Vector2(900f, -310f),
                 new Color(0.6f, 0.95f, 0.7f, 1f));
 
             // 驾驶仪表：车速 + 方向盘转角
@@ -954,13 +1163,15 @@ namespace Copilot.EditorTools
 
             // ---- 玩法层 UI：警告横幅 / 实时分数 / 结算面板 ----
 
-            // 警告横幅：她在犯错、等你开口。放在屏幕中上部，第一人称视角里最显眼的位置
-            // （避开左上角的教程块与底部字幕/仪表，见 Validate 的间距说明）
+            // 警告横幅：她在犯错、等你开口。
+            // ⚠️ 位置必须**避开左上角的四行教学块**（Y 轮扩行后它占到 y≈306px）：
+            // 横幅是后建的兄弟节点，会**盖在**结果行上面（实测把「方向不对：…」那句话吃掉了）。
+            // 所以放在屏幕中部偏上（y 从顶部 410~518px），既显眼又不打架。
             var bannerBg = NewImage("MistakeBannerBg", root, new Color(0.95f, 0.6f, 0.15f, 0.85f));
-            Anchor(bannerBg.rectTransform, new Vector2(0.25f, 0.62f), new Vector2(0.75f, 0.72f), Vector2.zero, Vector2.zero);
+            Anchor(bannerBg.rectTransform, new Vector2(0.25f, 0.52f), new Vector2(0.75f, 0.62f), Vector2.zero, Vector2.zero);
 
             var bannerLabel = NewText("MistakeBanner", root, "", 34, TextAnchor.MiddleCenter,
-                new Vector2(0.25f, 0.62f), new Vector2(0.75f, 0.72f), Vector2.zero, Vector2.zero, Color.white);
+                new Vector2(0.25f, 0.52f), new Vector2(0.75f, 0.62f), Vector2.zero, Vector2.zero, Color.white);
             bannerLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
             bannerBg.enabled = false;
             bannerLabel.enabled = false;
@@ -1274,8 +1485,8 @@ namespace Copilot.EditorTools
             Requires(road != null, "场景里没有道路几何 RoadGeometry（玩法检测靠它）", problems);
             if (road != null)
             {
-                Requires(road.laneCenterXs != null && road.laneCenterXs.Length == 4,
-                    "RoadGeometry.laneCenterXs 不是 4 条车道（车道数变了检测会错位）", problems);
+                Requires(road.laneCenterXs != null && road.laneCenterXs.Length == 3,
+                    "RoadGeometry.laneCenterXs 不是 3 条练习道（车道数变了检测会错位）", problems);
             }
 
             var sensors = FindInScene<VehicleSensors>(scene);
@@ -1317,11 +1528,14 @@ namespace Copilot.EditorTools
             Requires(CountInScene(scene, "SettlementPanel") >= 1, "没有结算面板 SettlementPanel", problems);
             Requires(CountInScene(scene, "MistakeBanner") >= 1, "没有警告横幅 MistakeBanner", problems);
 
-            // 场景内容：确认 P9 的城市几何真的生成了（空场景也能「校验通过」就没意义了）
-            Requires(CountInScene(scene, "Building") >= 10, "楼群数量不足（<10），城市没生成", problems);
-            Requires(CountInScene(scene, "StreetLight") >= 8, "路灯数量不足（<8）", problems);
-            Requires(CountInScene(scene, "LaneDash") >= 20, "车道虚线数量不足（<20）", problems);
-            Requires(CountInScene(scene, "ParkedCar") >= 1, "没有路边停车", problems);
+            // 场景内容：确认**训练场**几何真的生成了（空场景也能「校验通过」就没意义了）。
+            // 训练场 = 水泥地 + 练习道标线 + 库位 + 围栏；**不该再有楼群**（那是主路场地的观感，issue #2 要它消失）。
+            Requires(CountInScene(scene, "Ground") >= 1, "没有训练场水泥地（Ground）", problems);
+            Requires(CountInScene(scene, "LaneMark") >= 4, "练习道标线数量不足（<4）", problems);
+            Requires(CountInScene(scene, "BayLine") >= 8, "库位标线数量不足（<8，倒车入库/侧方停车没画出来）", problems);
+            Requires(CountInScene(scene, "Fence") >= 4, "围栏数量不足（<4），场地不是封闭的", problems);
+            Requires(CountInScene(scene, "StopLine") >= 1, "没有停止线（减速那一步没有视觉锚点）", problems);
+            Requires(CountInScene(scene, "Building") == 0, "训练场里不该有楼群（那是「大马路」观感，issue #2 要它消失）", problems);
 
             if (problems.Length > 0) throw Fail(problems);
 
@@ -1355,7 +1569,9 @@ namespace Copilot.EditorTools
             //    结果学员的模型反而没法检查（第一版就是这么踩的）。
             var gameplayHud = FindInScene<GameplayHud>(scene);
             ShowcaseBanner(gameplayHud, true);
+            ShowcaseTutorial(scene, true);
             var forward = CaptureView(cam, Quaternion.Euler(0f, restYaw, 0f), PreviewRelativePath);
+            ShowcaseTutorial(scene, false);
             ShowcaseBanner(gameplayHud, false);
 
             // 扭头看学员：**不放面板**，专门检查人形建模（-70° 才把她摆到画面中间附近）
@@ -1379,6 +1595,34 @@ namespace Copilot.EditorTools
             var avatar = FindInScene<DriverAvatar>(scene);
             if (avatar == null || avatar.head == null) return;
             avatar.head.localRotation = on ? Quaternion.Euler(0f, 58f, 0f) : Quaternion.identity;
+        }
+
+        /// <summary>
+        /// 预览图专用：给教学提示块填一份**代表性文本**。
+        ///
+        /// 编辑模式下 `TutorialDirector.Start` 不跑 → `Refresh()` 没执行 → 这两行是空的，
+        /// 于是**四行提示的排版永远无法从预览图里检查**（而排版问题只有看图才发现）。
+        /// 这里按 `TutorialDirector.Refresh` 的真实格式填样例，渲完再清掉。
+        /// </summary>
+        static void ShowcaseTutorial(Scene scene, bool on)
+        {
+            var tutorial = FindInScene<TutorialDirector>(scene);
+            if (tutorial == null) return;
+
+            if (tutorial.stepLabel != null)
+            {
+                tutorial.stepLabel.text = on
+                    ? "【科目一】训练场 · 第一课　5/9\n"
+                      + "本节：向左变道 —— 让她往左挪一条道。变道本身不带左右，方向靠你原话说清。\n"
+                      + "目标：真的往左挪（转向为负）\n"
+                      + "照着念：「向左变道」"
+                    : string.Empty;
+            }
+
+            if (tutorial.resultLabel != null)
+            {
+                tutorial.resultLabel.text = on ? "方向不对：她挪反了方向 —— 变道时把「左」说清楚。" : string.Empty;
+            }
         }
 
         /// <summary>预览图专用：临时点亮/还原「警告横幅 + 实时分数」。</summary>

@@ -31,6 +31,12 @@ namespace Copilot.Gameplay
 
         public DialogueBubble bubble;
 
+        [Header("结果行颜色")]
+        [Tooltip("过关/正常")]
+        [SerializeField] Color _goodColor = new Color(0.6f, 0.95f, 0.7f, 1f);
+        [Tooltip("做错提示（暖色，让人一眼看出「她做错了」）")]
+        [SerializeField] Color _wrongColor = new Color(1f, 0.72f, 0.35f, 1f);
+
         TutorialProgress _progress;
 
         /// <summary>
@@ -79,9 +85,14 @@ namespace Copilot.Gameplay
         void OnTurnEvent(TurnEvent e)
         {
             if (e == null || e.Kind != TurnEventKind.DriveAction || e.Action == null) return;
-            if (!_progress.Observe(e.Action.Intent)) return;
 
-            Refresh();
+            // 转向符号 = 方向（TurnPipeline 已跑过 ApplyDirection，Steering 的符号就是左右）
+            int direction = e.Action.Steering > 0f ? 1 : e.Action.Steering < 0f ? -1 : 0;
+
+            var observation = _progress.Observe(e.Action.Intent, direction);
+            if (observation == TutorialObservation.NotApplicable) return;
+
+            Refresh(observation);
 
             if (_progress.IsCompleted && announceCompletion && bubble != null)
             {
@@ -89,16 +100,28 @@ namespace Copilot.Gameplay
             }
         }
 
-        /// <summary>把当前步骤刷到 HUD。</summary>
-        public void Refresh()
+        /// <summary>刚做对一步时用（会清掉做错提示）。</summary>
+        public void Refresh() => Refresh(TutorialObservation.Advanced);
+
+        /// <summary>
+        /// 把当前步骤刷到 HUD。
+        ///
+        /// 四行（issue #2 要求每一步都看得见「目标 / 当前状态 / 成功条件 / 下一步」）：
+        /// 关卡+步数 / 本节要做什么 / **做到什么算过** / 照着念的示例口令。
+        /// <paramref name="observation"/> 不是 <c>Advanced</c> 时，把「为什么错」写进结果行（暖色）；
+        /// 做对了就恢复成绿色。
+        /// </summary>
+        void Refresh(TutorialObservation observation)
         {
             if (stepLabel == null) return;
             var level = _progress.Level;
 
             if (_progress.IsCompleted)
             {
-                stepLabel.text = $"【{level.Subject}】{level.Title}　✅ 通过";
-                if (resultLabel != null) resultLabel.text = "教学关完成 —— 科目二 · 场地驾驶 待开放";
+                stepLabel.text =
+                    $"【{level.Subject}】{level.Title}　{_progress.TotalSteps}/{_progress.TotalSteps}\n" +
+                    "✅ 这一课的动作全做下来了。";
+                SetResult("教学关完成 —— 科目二 · 场地驾驶 待开放", _goodColor);
                 return;
             }
 
@@ -106,8 +129,26 @@ namespace Copilot.Gameplay
             stepLabel.text =
                 $"【{level.Subject}】{level.Title}　{_progress.StepIndex + 1}/{_progress.TotalSteps}\n" +
                 $"本节：{step.Title} —— {step.Instruction}\n" +
+                $"目标：{step.SuccessCriteria}\n" +
                 $"照着念：「{step.ExamplePhrase}」";
-            if (resultLabel != null) resultLabel.text = string.Empty;
+
+            if (observation == TutorialObservation.Advanced)
+            {
+                SetResult(string.Empty, _goodColor);
+                return;
+            }
+
+            string prefix = observation == TutorialObservation.WrongDirection
+                ? "方向不对："
+                : "动作不对：";
+            SetResult(prefix + _progress.LastWrongHint, _wrongColor);
+        }
+
+        void SetResult(string text, Color color)
+        {
+            if (resultLabel == null) return;
+            resultLabel.color = color;
+            resultLabel.text = text ?? string.Empty;
         }
     }
 }

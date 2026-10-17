@@ -686,7 +686,8 @@ public class TutorialProgressResetTests
         var p = new TutorialProgress(LevelCatalog.Subject1Tutorial);
         for (int i = 0; i < 3; i++)
         {
-            p.Observe(LevelCatalog.Subject1Tutorial.Steps[i].AcceptIntents[0]);
+            var step = LevelCatalog.Subject1Tutorial.Steps[i];
+            p.Observe(step.AcceptIntents[0], step.RequiredDirection);
         }
         Assert.Equal(3, p.StepIndex);
 

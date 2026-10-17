@@ -482,7 +482,8 @@ public class TutorialProgressTests
         {
             Assert.False(progress.IsCompleted, $"「{step.Title}」还没做就不该完成");
             Assert.Equal(step.Title, progress.Current!.Title);
-            Assert.True(progress.Observe(step.AcceptIntents[0]), $"做对「{step.Title}」应推进");
+            Assert.Equal(TutorialObservation.Advanced,
+                progress.Observe(step.AcceptIntents[0], step.RequiredDirection));
         }
 
         Assert.True(progress.IsCompleted);
@@ -496,25 +497,95 @@ public class TutorialProgressTests
         var first = progress.Current!;
 
         // 第一步要的是起步（ACCELERATE），这里给左转、给拒绝、给反问都不该动
-        Assert.False(progress.Observe(Intents.TurnLeft));
-        Assert.False(progress.Observe(Intents.Ignore));
-        Assert.False(progress.Observe(Intents.QuestionBack));
-        Assert.False(progress.Observe(null));
-        Assert.False(progress.Observe(string.Empty));
+        Assert.Equal(TutorialObservation.WrongIntent, progress.Observe(Intents.TurnLeft, 0));
+        Assert.Equal(TutorialObservation.WrongIntent, progress.Observe(Intents.Ignore, 0));
+        Assert.Equal(TutorialObservation.WrongIntent, progress.Observe(Intents.QuestionBack, 0));
+        Assert.Equal(TutorialObservation.NotApplicable, progress.Observe(null, 0));
+        Assert.Equal(TutorialObservation.NotApplicable, progress.Observe(string.Empty, 0));
 
         Assert.Equal(0, progress.StepIndex);
         Assert.Equal(first.Title, progress.Current!.Title);
+        Assert.NotNull(progress.LastWrongHint);   // 做错时必须给得出「为什么错」
     }
 
     [Fact]
     public void 完成后不再接受任何动作()
     {
         var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
-        foreach (var step in LevelCatalog.Subject1Tutorial.Steps) progress.Observe(step.AcceptIntents[0]);
+        foreach (var step in LevelCatalog.Subject1Tutorial.Steps)
+        {
+            progress.Observe(step.AcceptIntents[0], step.RequiredDirection);
+        }
 
         Assert.True(progress.IsCompleted);
-        Assert.False(progress.Observe(Intents.Accelerate));
+        Assert.Equal(TutorialObservation.NotApplicable, progress.Observe(Intents.Accelerate, 0));
         Assert.True(progress.IsCompleted);
+    }
+
+    [Fact]
+    public void 变道方向反了不推进_方向不明则放行()
+    {
+        // 先过掉前四步，让当前步落到「向左变道」
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 4; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        var laneStep = progress.Current!;
+        Assert.Equal("向左变道", laneStep.Title);
+        Assert.Equal(-1, laneStep.RequiredDirection);
+
+        // 意图对、方向反了 → 拦下，且不推进（这就是「说往左她往右」在关卡层的兜底）
+        Assert.Equal(TutorialObservation.WrongDirection, progress.Observe(Intents.LaneChange, 1));
+        Assert.Equal(laneStep.Title, progress.Current!.Title);
+        Assert.NotNull(progress.LastWrongHint);
+
+        // 方向不明（玩家只说「变道」）→ 放行，不该卡住教学
+        Assert.Equal(TutorialObservation.Advanced, progress.Observe(Intents.LaneChange, 0));
+        Assert.Equal("向右变道", progress.Current!.Title);
+    }
+
+    [Fact]
+    public void 向右变道这一步_明确往左也会被拦下()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 5; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        Assert.Equal("向右变道", progress.Current!.Title);
+        Assert.Equal(TutorialObservation.WrongDirection, progress.Observe(Intents.LaneChange, -1));
+        Assert.Equal(TutorialObservation.Advanced, progress.Observe(Intents.LaneChange, 1));
+    }
+
+    [Fact]
+    public void 重开后做错提示被清掉()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        progress.Observe(Intents.TurnLeft, 0);
+        Assert.NotNull(progress.LastWrongHint);
+
+        progress.Reset();
+
+        Assert.Null(progress.LastWrongHint);
+        Assert.Equal(0, progress.StepIndex);
+    }
+
+    [Fact]
+    public void 教学关拆成九步_覆盖issue要求的练习序列()
+    {
+        var steps = LevelCatalog.Subject1Tutorial.Steps;
+        var expected = new[]
+        {
+            "起步", "直线保持", "左转", "右转", "向左变道", "向右变道", "减速", "倒车", "靠边停车",
+        };
+
+        Assert.Equal(expected.Length, steps.Count);
+        for (int i = 0; i < expected.Length; i++) Assert.Equal(expected[i], steps[i].Title);
     }
 
     [Fact]
@@ -527,6 +598,9 @@ public class TutorialProgressTests
                 Assert.False(string.IsNullOrWhiteSpace(step.Title));
                 Assert.False(string.IsNullOrWhiteSpace(step.Instruction));
                 Assert.False(string.IsNullOrWhiteSpace(step.ExamplePhrase));
+                // issue #2 要求每一步都写清「成功条件」与「做错为什么」，否则 HUD 就没话可提示
+                Assert.False(string.IsNullOrWhiteSpace(step.SuccessCriteria), $"「{step.Title}」缺成功条件");
+                Assert.False(string.IsNullOrWhiteSpace(step.WhyWrong), $"「{step.Title}」缺做错解释");
                 Assert.NotEmpty(step.AcceptIntents);
             }
         }

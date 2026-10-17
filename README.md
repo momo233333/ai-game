@@ -3,9 +3,14 @@
 本地 AI 语音交互驾驶教学游戏。**主线为 V2.0 全 C# 架构**（见 [`IT方案1.md`](IT方案1.md)）：
 Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR / LLM / TTS 全本地推理），两者同语言、共享契约与纯逻辑类库。
 
-> **玩法**：第一人称坐在**副驾驶当教练**，用语音教女学员**小雅**开车；科目一到科目四共四关，
-> **🏁 第一阶段里程碑 = 科目一 · 教学关（起步 → 左转 → 右转 → 变道 → 减速 → 靠边停车）已达成**，
+> **玩法**：第一人称坐在**副驾驶当教练**，用语音教女学员**小雅**开车；科目一到科目四共四关。
+> **🏁 第一阶段里程碑 = 科目一 · 教学关（训练场序章）已达成** ——
+> 场景是**封闭低速的驾校练习场**（水泥地 + 三条练习道 + 直角弯区 + 倒车入库位 + 侧方停车位 + S 弯 + 围栏），
+> 教学关 **9 步**：起步 → 直线保持 → 左转 → 右转 → 向左变道 → 向右变道 → 减速 → 倒车 → 靠边停车（**车速上限 40km/h**）。
+> **每一步 HUD 上都写清「本节要做什么 / 目标（做到什么算过）/ 照着念的示例口令」**；
+> 做错了会给出**「为什么错」**，还会区分「动作不对」和**「方向不对」**（该往左却往右不算过）。
 > 科目二~四在里程碑之后才开发（`LevelCatalog` 里已占位，见 [`开发进度.md`](开发进度.md)）。
+> 想回看原来的 4 车道大马路：菜单「副驾指令 / **生成主路场景（备用，科目三用）**」→ `Assets/Scenes/Road.unity`。
 >
 > **她会主动犯错（当前默认关闭）**：剧本化的两个失误 —— **偏出车道**（她自顾自往右飘）与**忘了刹车**（一路给油冲向前车）。
 > 屏幕中上部会弹出**警告横幅 + 倒计时**，你得在窗口内（2.6–2.8 秒）开口才救得回来；
@@ -76,7 +81,7 @@ ai-game/
 │   ├── Copilot.Client/         # ★ 共用接入层：gRPC 客户端 + proto→Core 事件映射（无 Unity 依赖）
 │   └── Copilot.AIService/      # ★ AI 伴生进程（net8.0 控制台 + gRPC + CLI）
 ├── tests/
-│   ├── Copilot.Tests/          # xUnit 206 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集 + 玩法层）
+│   ├── Copilot.Tests/          # xUnit 210 项（含起真 gRPC 服务端的集成测试 + 客户端接入测试 + P6 对话回归集 + 玩法层 + 关卡）
 │   ├── dialogue_cases.tsv      # P6 对话回归集：41 条用例（TAB 分隔，分类语义断言）
 │   └── samples/                # 7 条指令语音（真 ASR 测试用）
 ├── models/                     # 模型权重（gitignore，用 tools/fetch_models.ps1 下）
@@ -88,7 +93,8 @@ ai-game/
 │                               #   Assets/Scripts（运行时）+ Assets/Editor（自检 + 场景生成器 + 自动通关）
 │                               #   Assets/Scripts/Gameplay（RoadGeometry / VehicleSensors / MistakeRunner）玩法层
 │                               #   Assets/Scripts/Audio/LocalVoiceLib.cs（本地播语音库：她的恐慌/救回台词）
-│                               #   Assets/Scenes/Greybox.unity（生成的可玩灰盒场景，三张预览图在 logs/）
+│                               #   Assets/Scenes/Greybox.unity（训练场=默认可玩场景）
+│                               #   菜单「生成主路场景（备用）」可另出 Assets/Scenes/Road.unity（科目三用）
 │                               #   Assets/Plugins/Copilot（DLL，gitignore，由脚本生成）
 └── ai-service/                 # ⚠️ 遗留：V1.0 Python 实现，不再维护
 ```
@@ -106,7 +112,7 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1              # �
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only tts    # 只下 TTS（MeloTTS，162 MB）
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（206 项）
+# 1) 编译（0 警告 0 错误）+ 测试（210 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -154,8 +160,10 @@ dotnet run --project src\Copilot.AIService -- --server          # 保持这个�
 #    忘了重跑会报 “error CS0234: 命名空间不存在” —— 看着像代码错，其实是 DLL 旧了。
 powershell -ExecutionPolicy Bypass -File tools\build_unity_plugins.ps1
 # 用 Unity **2022.3 LTS** 打开 unity\ 目录（工程已在本机 2022.3.62f3c1 上验证过编译与连通）
-# 菜单「副驾指令 / 生成灰盒场景」一键生成 Assets/Scenes/Greybox.unity
+# 菜单「副驾指令 / 生成灰盒场景」一键生成训练场 Assets/Scenes/Greybox.unity
 # 打开 Greybox 按 Play → 按住空格说话（教小雅开车）；Q/E 或按住鼠标右键扭头看她
+#   · 按 HUD 左上角提示走九步：起步 → 直线保持 → 左转 → 右转 → 向左变道 → 向右变道 → 减速 → 倒车 → 靠边停车
+#   · 故意做错（该左转时说右转）会看到「方向不对：…」的暖色提示
 #   · 你一按空格就会**打断妹妹的话**（抢话）——教练开口，学员闭嘴，不用等她说完
 #   · 识别不准先看 Console 里的 [MicCapture] 行：实际采样率 / 帧数 / 峰值 / RMS
 #     （峰值 <1500 说明录得太小声，不是模型的问题）；也看 Unity 编辑器日志里的 [Copilot] 听到：
@@ -167,10 +175,11 @@ powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -All
 #    单跑某个方法：
 powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.EditorTools.SmokeTest.Run
 #      · SmokeTest.Run        连通性自检：文本回合 + 语音回合（真 ASR）
-#      · SceneBuilder.BuildAndExit     重新生成 Assets/Scenes/Greybox.unity
+#      · SceneBuilder.BuildAndExit     重新生成训练场 Assets/Scenes/Greybox.unity
+#      · SceneBuilder.BuildMainRoadAndExit  生成备用主路场景 Assets/Scenes/Road.unity（科目三用）
 #      · SceneBuilder.ValidateAndExit  场景结构自检（引用 + 内容数量断言）
 #      · SceneBuilder.CaptureAndExit   渲染预览图 → logs\unity_scene_preview*.png（三张）
-#      · GameplaySelfTest.RunAndExit   自动通关一局（不靠人手玩）：六步 + 两个失误 + 重开 + 结算 + 本地语音库
+#      · GameplaySelfTest.RunAndExit   自动通关一局（不靠人手玩）：九步 + 两个失误 + 重开 + 结算 + 本地语音库
 ```
 
 > **回归集怎么扩**：直接往 [tests/dialogue_cases.tsv](tests/dialogue_cases.tsv) 加行（TAB 分隔：输入 / 期望意图 / 分类 / 备注）。

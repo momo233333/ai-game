@@ -30,6 +30,10 @@ namespace Copilot.Vehicle
         [Tooltip("压线要连续这么久才上报（防单帧抖动）")]
         public float laneDepartureDwellMs = 400f;
 
+        [Tooltip("是否上报**独立的**压线。封闭训练场里没有\"车道\"可言（车会开去库位/S 弯），由 SceneBuilder 关掉；\n"
+                 + "否则正常练一次变道就会因为横向偏移超阈值被记一次压线。")]
+        public bool standaloneLaneDeparture = true;
+
         [Tooltip("前方障碍离车头轴线多远还算「同车道」")]
         public float hazardLateralGateM = 4f;
 
@@ -64,7 +68,10 @@ namespace Copilot.Vehicle
         /// <summary>路面与地面物件：撞到它们不算撞车（轮胎接地也会触发回调）。</summary>
         static readonly string[] GroundNames =
         {
+            // 主路场地
             "Road", "CrossRoad", "Sidewalk", "Curb", "LaneDash", "LaneEdge", "CenterLine", "Zebra",
+            // 训练场（科目一）：水泥地与画上去的标线/库位 —— 都是"地"，不是障碍物
+            "Ground", "LaneMark", "BayLine", "StopLine",
         };
 
         /// <summary>
@@ -103,6 +110,8 @@ namespace Copilot.Vehicle
         /// <summary>非失误类的压线（比如玩家让她瞎打方向），带迟滞避免抖动。</summary>
         void TrackStandaloneLaneDeparture()
         {
+            if (!standaloneLaneDeparture) return;
+
             if (!LaneGeometryValid || Mathf.Abs(LateralOffsetM) < laneDepartureToleranceM)
             {
                 _laneDwellMs = 0f;

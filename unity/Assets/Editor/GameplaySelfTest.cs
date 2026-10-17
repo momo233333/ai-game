@@ -99,20 +99,24 @@ namespace Copilot.EditorTools
                 runner.MistakeResolved += o => outcomes.Add(o);
 
                 // ---- ① 结构 ----
-                Require(road.laneCenterXs != null && road.laneCenterXs.Length == 4,
-                    "RoadGeometry 不是 4 条车道", problems);
+                Require(road.laneCenterXs != null && road.laneCenterXs.Length == 3,
+                    "RoadGeometry 不是 3 条练习道", problems);
                 Require(tutorial.Progress != null, "TutorialDirector.Progress 为 null（Awake 未建）", problems);
                 Require(runner.Session != null, "MistakeRunner.Session 为 null（Awake 未建）", problems);
-                Require(LevelCatalog.Subject1Tutorial.Steps.Count == 6, "教学关不是六步", problems);
+                Require(LevelCatalog.Subject1Tutorial.Steps.Count == 9, "教学关不是九步", problems);
 
-                // ---- ② 教学六步 ----
+                // ---- ② 教学九步（每步都要按它要求的方向做，方向校验才有意义）----
                 int advancedCount = 0;
                 foreach (var step in LevelCatalog.Subject1Tutorial.Steps)
                 {
-                    if (tutorial.Progress.Observe(step.AcceptIntents[0])) advancedCount++;
+                    if (tutorial.Progress.Observe(step.AcceptIntents[0], step.RequiredDirection)
+                        == TutorialObservation.Advanced)
+                    {
+                        advancedCount++;
+                    }
                 }
-                Require(advancedCount == 6, "六步只推进了 " + advancedCount + " 步", problems);
-                Require(tutorial.Progress.IsCompleted, "六步走完却不是完成态", problems);
+                Require(advancedCount == 9, "九步只推进了 " + advancedCount + " 步", problems);
+                Require(tutorial.Progress.IsCompleted, "九步走完却不是完成态", problems);
                 log.Append("  教学：").Append(tutorial.Progress.StepIndex).Append('/')
                    .Append(tutorial.Progress.TotalSteps).AppendLine(" 步");
 
@@ -167,13 +171,13 @@ namespace Copilot.EditorTools
                 Require(outcomes.Count == 1 && outcomes[0].LocalEventName == "lane_departure",
                     "物理失败事件名不是 lane_departure", problems);
 
-                // ---- ⑥ 权威一局：六步 + 失误①救回 + 失误②漏掉 → 结算 ----
+                // ---- ⑥ 权威一局：九步 + 失误①救回 + 失误②漏掉 → 结算 ----
                 runner.RestartLevel();
                 outcomes.Clear();
 
                 foreach (var step in LevelCatalog.Subject1Tutorial.Steps)
                 {
-                    tutorial.Progress.Observe(step.AcceptIntents[0]);
+                    tutorial.Progress.Observe(step.AcceptIntents[0], step.RequiredDirection);
                 }
                 runner.Session.ObserveStepAdvance(tutorial.Progress.StepIndex);   // Update 里那行同步逻辑
 

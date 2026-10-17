@@ -3,14 +3,19 @@ using System.Collections.Generic;
 
 namespace Copilot.Core.Levels
 {
-    /// <summary>教学关的一步：教练该说什么、学员做对了什么算过关。</summary>
+    /// <summary>教学关的一步：教练该说什么、学员做对了什么算过关、做错了怎么解释。</summary>
     public sealed class TutorialStep
     {
-        public TutorialStep(string title, string instruction, string examplePhrase, params string[] acceptIntents)
+        public TutorialStep(string title, string instruction, string examplePhrase,
+            string successCriteria, string whyWrong, int requiredDirection,
+            params string[] acceptIntents)
         {
             Title = title;
             Instruction = instruction;
             ExamplePhrase = examplePhrase;
+            SuccessCriteria = successCriteria;
+            WhyWrong = whyWrong;
+            RequiredDirection = requiredDirection;
             AcceptIntents = acceptIntents ?? Array.Empty<string>();
         }
 
@@ -22,6 +27,18 @@ namespace Copilot.Core.Levels
 
         /// <summary>示例口令（HUD 显示，玩家照着念即可）。</summary>
         public string ExamplePhrase { get; }
+
+        /// <summary>**成功条件**（HUD 显示）：做到什么算这一步过了。</summary>
+        public string SuccessCriteria { get; }
+
+        /// <summary>**做错时说什么**（HUD 显示）：她做的不对，该提示玩家怎么纠正。</summary>
+        public string WhyWrong { get; }
+
+        /// <summary>
+        /// 这一步要求的方向：**0 = 不校验**（如起步/减速），**−1 = 左，+1 = 右**。
+        /// 只有「变道」这类**意图本身不带方向**的步骤才需要它 —— TURN_LEFT/TURN_RIGHT 的方向已写在意图里。
+        /// </summary>
+        public int RequiredDirection { get; }
 
         /// <summary>学员做出这些动作中的任一个就算这一步过了。</summary>
         public IReadOnlyList<string> AcceptIntents { get; }
@@ -59,32 +76,56 @@ namespace Copilot.Core.Levels
     public static class LevelCatalog
     {
         /// <summary>
-        /// 科目一 · 教学关（上车第一课）：六步走完基础操作，每步一个动作。
-        /// 顺序刻意从「起步 → 转向 → 变道 → 减速 → 停车」，跟真实教练带新手的顺序一致。
+        /// 科目一 · 教学关（训练场第一课）：**九步**走完基础操作。
+        ///
+        /// 顺序对齐「驾校练习场」的空间动线：先在练习道上起步/直行，再到弯区左转右转，
+        /// 然后左右各变一次道，最后减速 → 倒车入库 → 靠边停车收工。
+        /// 步骤拆细的动机（issue #2）：每个微任务都要有明确的目标、成功条件与做错解释。
+        ///
+        /// ⚠️ **没有引入任何新意图** —— 九步全部复用现有 9 个 intent，
+        /// 所以不会波及 `Intents.All` → GBNF 文法 → PromptBuilder → 规则后端 → 41 条对话回归集。
         /// </summary>
         public static readonly LevelDefinition Subject1Tutorial = new LevelDefinition(
             id: "subject1_tutorial",
             subject: "科目一",
-            title: "教学关 · 上车第一课",
+            title: "训练场 · 第一课",
             steps: new[]
             {
                 new TutorialStep("起步", "先让她把车发动起来，慢慢给油。", "起步，慢慢来",
-                    Intents.Accelerate),
+                    "车真的动起来", "她还没动呢 —— 说「起步，慢慢来」。",
+                    0, Intents.Accelerate),
 
-                new TutorialStep("左转", "前面路口左转，让她提前打方向、看后视镜。", "前面路口左转",
-                    Intents.TurnLeft),
+                new TutorialStep("直线保持", "让她沿着练习道直着往前，别乱打方向。", "直行，保持直线",
+                    "车头保持朝前、继续往前开", "她要的是继续往前走 —— 说「直行」或「保持直线行驶」。",
+                    0, Intents.Accelerate),
 
-                new TutorialStep("右转", "下一个路口右转，注意右后方。", "前面右转",
-                    Intents.TurnRight),
+                new TutorialStep("左转", "到头有弯，让她提前打方向往左拐。", "前面左转",
+                    "车头真的朝左偏", "她的方向没往左 —— 再说一遍「前面左转」。",
+                    -1, Intents.TurnLeft),
 
-                new TutorialStep("变道", "让她变到左边车道，先看镜子再动方向。", "向左变道",
-                    Intents.LaneChange),
+                new TutorialStep("右转", "折回来，让她往右拐。", "向右拐",
+                    "车头真的朝右偏", "她没往右拐 —— 说「向右拐」。",
+                    1, Intents.TurnRight),
 
-                new TutorialStep("减速", "让她把速度降下来。", "减速",
-                    Intents.Brake),
+                new TutorialStep("向左变道", "让她往左挪一条道。变道本身不带左右，方向靠你原话说清。", "向左变道",
+                    "真的往左挪（转向为负）", "她挪反了方向 —— 变道时把「左」说清楚。",
+                    -1, Intents.LaneChange),
+
+                new TutorialStep("向右变道", "这回往右挪一条道。", "向右变道",
+                    "真的往右挪（转向为正）", "她挪反了方向 —— 说「向右变道」。",
+                    1, Intents.LaneChange),
+
+                new TutorialStep("减速", "到停止线前，让她把速度降下来。", "减速",
+                    "刹车真的踩下去了", "她要的是减速 —— 说「减速」或「慢一点」。",
+                    0, Intents.Brake),
+
+                new TutorialStep("倒车", "开到库位前，让她慢慢往后倒。", "倒车，慢慢往后倒",
+                    "车真的往后走（油门为负）", "她还没往后走 —— 说「倒车」或「往后倒一点」。",
+                    0, Intents.Reverse),
 
                 new TutorialStep("靠边停车", "最后靠边停稳，收工。", "靠边停车",
-                    Intents.Park),
+                    "车停稳", "她要的是停车 —— 说「靠边停车」。",
+                    0, Intents.Park),
             });
 
         /// <summary>科目二 · 场地（倒车入库 / 侧方停车 / 曲线行驶…）—— 待设计。</summary>
@@ -105,12 +146,31 @@ namespace Copilot.Core.Levels
         };
     }
 
+    /// <summary>一次动作观测的结果。</summary>
+    public enum TutorialObservation
+    {
+        /// <summary>关卡已完成或没有动作 —— 什么也不做。</summary>
+        NotApplicable,
+
+        /// <summary>这一步过了，指针前进。</summary>
+        Advanced,
+
+        /// <summary>动作不是当前这一步要的（包括没听清的反问、被拒绝的 IGNORE）。</summary>
+        WrongIntent,
+
+        /// <summary>动作对了但**方向反了**（如该向左变道却往右）。</summary>
+        WrongDirection,
+    }
+
     /// <summary>
     /// 教学关推进器：把「学员实际做出来的动作」翻译成「有没有过关」。
     ///
     /// 纯逻辑、无 Unity 依赖，可单测 —— 关卡规则属于游戏设计，不该埋在 MonoBehaviour 里。
-    /// 规则很简单：**必须按当前这一步要求的动作来**，做别的（包括没听清的反问、被拒绝的 IGNORE）
-    /// 一律不推进，也不倒退。
+    /// 规则：**必须按当前这一步要求的动作来，做别的（包括没听清的反问、被拒绝的 IGNORE）一律不推进、不倒退。**
+    ///
+    /// 方向校验只在<b>步骤要求方向</b>时生效（目前只有「向左/向右变道」两处）。
+    /// **方向不明时放行** —— 玩家可能只说「变道」而没说左右，不该卡住教学；
+    /// 只有**明确报错方向**（车真的往反方向偏）才算 <see cref="TutorialObservation.WrongDirection"/>。
     /// </summary>
     public sealed class TutorialProgress
     {
@@ -131,27 +191,53 @@ namespace Copilot.Core.Levels
         /// <summary>已完成步数 / 总步数（HUD 显示）。</summary>
         public int TotalSteps => Level.Steps.Count;
 
+        /// <summary>最近一次做错时该说的话（HUD 显示）；没做错时为 null。</summary>
+        public string? LastWrongHint { get; private set; }
+
         /// <summary>重开一局：回到第一步。</summary>
-        public void Reset() => StepIndex = 0;
+        public void Reset()
+        {
+            StepIndex = 0;
+            LastWrongHint = null;
+        }
 
         /// <summary>
-        /// 观察一个学员的实际动作。返回 true 表示这一步过掉了（HUD 该刷新）。
+        /// 观察一个学员的实际动作。返回这一步发生了什么（HUD 据此刷新与提示）。
         /// </summary>
-        public bool Observe(string? intent)
+        /// <param name="intent">学员实际做出的意图。</param>
+        /// <param name="direction">转向符号：−1 左 / +1 右 / 0 不明（见 <see cref="Intents.ParseDirection"/>）。</param>
+        public TutorialObservation Observe(string? intent, int direction)
         {
-            if (IsCompleted || string.IsNullOrEmpty(intent)) return false;
+            if (IsCompleted || string.IsNullOrEmpty(intent)) return TutorialObservation.NotApplicable;
 
             var step = Level.Steps[StepIndex];
+
+            bool matched = false;
             for (int i = 0; i < step.AcceptIntents.Count; i++)
             {
                 if (string.Equals(step.AcceptIntents[i], intent, StringComparison.Ordinal))
                 {
-                    StepIndex++;
-                    return true;
+                    matched = true;
+                    break;
                 }
             }
 
-            return false;
+            if (!matched)
+            {
+                LastWrongHint = step.WhyWrong;
+                return TutorialObservation.WrongIntent;
+            }
+
+            // 方向不明（0）放行；只有明确反向才拦
+            if (step.RequiredDirection != 0 && direction != 0 && direction != step.RequiredDirection)
+            {
+                LastWrongHint = step.WhyWrong;
+                return TutorialObservation.WrongDirection;
+            }
+
+            StepIndex++;
+            LastWrongHint = null;
+            return TutorialObservation.Advanced;
         }
     }
 }
