@@ -75,19 +75,39 @@ public class ActionLimitsTests
     [Theory]
     [InlineData("用5km/h的速度行驶", 5)]
     [InlineData("用 5 km/h 行驶", 5)]
+    // ↓ 用户实测的 ASR 原文：paraformer 输出的是**汉字数字**，一个阿拉伯数字都没有。
+    //   只认 0-9 的版本在这里抽成 0 → 定速从未触发过（这就是"说速度没反应"的真原因）。
+    [InlineData("你把速度调到五公里每小时", 5)]
+    [InlineData("开到十五公里", 15)]
+    [InlineData("保持二十公里每小时", 20)]
+    [InlineData("时速一百二十公里", 120)]
     [InlineData("开5公里", 5)]
-    [InlineData("保持20公里每小时", 20)]
     [InlineData("30km", 30)]
     [InlineData("12千米", 12)]
-    [InlineData("200公里", 120)]      // 夹到上限
-    // 不是速度的说法 → 必须抽成 0，否则会把「前面5米」当成定速 5
+    [InlineData("时速200公里", 120)]      // 夹到上限
+    [InlineData("开十迈", 16)]            // 迈是英里，1 迈 ≈ 1.609km/h
+    [InlineData("开五码", 5)]             // 大陆口语里「码」当 km/h
+    // 不是速度的说法 → 必须抽成 0，否则会把「前面五米」当成定速 5
     [InlineData("慢一点", 0)]
     [InlineData("前面5米有个坑", 0)]
     [InlineData("前面路口左转", 0)]
+    [InlineData("一直往前走", 0)]
     [InlineData("", 0)]
     public void 从原话抽目标速度(string text, int expected)
     {
         Assert.Equal(expected, Intents.ParseTargetSpeedKmh(text));
+    }
+
+    [Theory]
+    [InlineData("慢一点", true)]
+    [InlineData("你都没调呢慢一点开慢一点", true)]
+    [InlineData("别开快", true)]
+    [InlineData("开到五公里每小时", false)]
+    [InlineData("减速", false)]           // 「减速」归 BRAKE 意图，不该同时当"没给数字的降速"
+    [InlineData("前面左转", false)]
+    public void 识别没给数字的降速要求(string text, bool expected)
+    {
+        Assert.Equal(expected, Intents.IsSlowRequest(text));
     }
 
     [Theory]

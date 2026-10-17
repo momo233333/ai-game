@@ -436,7 +436,7 @@ public static class Cli
             return;
         }
 
-        Console.WriteLine($"妹妹> {result.Text}");
+        Console.WriteLine($"小雅> {result.Text}");
         Console.WriteLine($"  [TTS ] ({(result.FromVoiceLib ? "语音库" : "实时合成")}) 回放 {result.Pcm16.Length / 2 / (double)result.SampleRate:0.00}s…");
         AudioIo.Play(result.Pcm16, result.SampleRate);
     }
@@ -659,7 +659,7 @@ public static class Cli
                 break;
 
             case TurnEventKind.LlmDelta:
-                Console.WriteLine($"妹妹> {e.Text}");
+                Console.WriteLine($"小雅> {e.Text}");
                 break;
 
             case TurnEventKind.TtsAudio:

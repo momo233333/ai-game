@@ -75,8 +75,21 @@ namespace Copilot.Vehicle
             if (evt.Kind == TurnEventKind.AsrFinal)
             {
                 if (!cruiseEnabled || vehicle == null) return;
+
                 int target = Intents.ParseTargetSpeedKmh(evt.Text);
-                if (target > 0) vehicle.SetTargetSpeed(target);
+                if (target > 0)
+                {
+                    vehicle.SetTargetSpeed(target);
+                    Debug.Log($"[Cruise] 听见「{evt.Text}」→ 定速 {target} km/h");
+                }
+                else if (Intents.IsSlowRequest(evt.Text) && vehicle.SpeedKmh > 0.5f)
+                {
+                    // 「慢一点」这类没给数字的降速要求：按**当前车速打六折**（下限 3km/h）。
+                    // 车已经停了就不动它 —— 否则一句「慢一点」会把停着的车推出去。
+                    float slow = Mathf.Max(3f, vehicle.SpeedKmh * 0.6f);
+                    vehicle.SetTargetSpeed(slow);
+                    Debug.Log($"[Cruise] 听见「{evt.Text}」→ 降到 {slow:0.#} km/h（当时 {vehicle.SpeedKmh:0.#}）");
+                }
                 return;
             }
 
