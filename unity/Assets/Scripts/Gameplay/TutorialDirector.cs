@@ -39,6 +39,9 @@ namespace Copilot.Gameplay
 
         TutorialProgress _progress;
 
+        /// <summary>本轮教练的原话（来自 <c>AsrFinal</c>）——「减速」那一步要它区分「刹车」与「慢一点」。</summary>
+        string? _lastPlayerText;
+
         /// <summary>
         /// 当前进度。**getter 保证非空**（在 <see cref="Awake"/> 里建），所以调用方不必再判 null
         /// —— 之前它是在 <c>Start</c> 里建的，Start 之前拿到 null 是个坑（编辑模式也不会跑 Start）。
@@ -74,6 +77,7 @@ namespace Copilot.Gameplay
         {
             EnsureProgress();
             _progress.Reset();
+            _lastPlayerText = null;
             Refresh();
         }
 
@@ -84,12 +88,21 @@ namespace Copilot.Gameplay
 
         void OnTurnEvent(TurnEvent e)
         {
-            if (e == null || e.Kind != TurnEventKind.DriveAction || e.Action == null) return;
+            if (e == null) return;
+
+            // 先记住教练这一轮的原话：「减速」那一步要靠它区分「减速/刹车」与「慢一点」（见 AcceptSlowRequest）
+            if (e.Kind == TurnEventKind.AsrFinal)
+            {
+                _lastPlayerText = e.Text;
+                return;
+            }
+
+            if (e.Kind != TurnEventKind.DriveAction || e.Action == null) return;
 
             // 转向符号 = 方向（TurnPipeline 已跑过 ApplyDirection，Steering 的符号就是左右）
             int direction = e.Action.Steering > 0f ? 1 : e.Action.Steering < 0f ? -1 : 0;
 
-            var observation = _progress.Observe(e.Action.Intent, direction);
+            var observation = _progress.Observe(e.Action.Intent, direction, Intents.IsSlowRequest(_lastPlayerText));
             if (observation == TutorialObservation.NotApplicable) return;
 
             Refresh(observation);

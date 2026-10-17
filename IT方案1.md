@@ -163,7 +163,7 @@
 | LLM | Qwen2.5-7B-Instruct GGUF **Q4_K_M** | ~4.4GB | ModelScope / HuggingFace（GGUF 分片） |
 | ASR | sherpa-onnx 流式 paraformer 中文（含标点模型） | ~200MB | k2-fsa/sherpa-onnx 模型仓库 |
 | VAD | silero-vad ONNX | ~2MB | k2-fsa/sherpa-onnx |
-| TTS（实时） | VITS 中文 ONNX（备选 melo-tts） | 数十~百 MB | k2-fsa/sherpa-onnx |
+| TTS（实时） | sherpa-onnx 中文 VITS **`vits-zh-hf-eula`**（中文女声，116MB；原 melo-tts zh_en，用户试听后换） | 数十~百 MB | k2-fsa/sherpa-onnx 模型仓库（tts-models release） |
 | 语音库 | 预生成台词 wav（70+ 条，24kHz） | 数十 MB 内 | 本地脚本合成 |
 
 ### 2.5 NuGet / 插件清单

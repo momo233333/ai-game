@@ -667,6 +667,43 @@ public class TutorialProgressTests
     }
 
     [Fact]
+    public void 减速这一步_刹车过_慢一点也过_但给油不过()
+    {
+        // 实测：LLM 把「减速」归成 ACCELERATE（我上一轮那条"慢速类→ACCELERATE"的提示词把它卷进去了），
+        // 而这一步当时只收 BRAKE → 卡死。修法两层：提示词把「减速」归回刹车类 + 这一步也收「慢一点」。
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 6; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        Assert.Equal("减速", progress.Current!.Title);
+
+        // ① 「给油」「直行」都是 ACCELERATE —— 没有降速语义，不该过
+        Assert.Equal(TutorialObservation.WrongIntent, progress.Observe(Intents.Accelerate, 0, slowRequest: false));
+        Assert.Equal("减速", progress.Current!.Title);
+
+        // ② 「慢一点」也是 ACCELERATE，但它带降速语义（Unity 侧会把定速目标打到六折）→ 算过
+        Assert.Equal(TutorialObservation.Advanced, progress.Observe(Intents.Accelerate, 0, slowRequest: true));
+        Assert.Equal("倒车", progress.Current!.Title);
+    }
+
+    [Fact]
+    public void 减速这一步_说刹车直接过()
+    {
+        var progress = new TutorialProgress(LevelCatalog.Subject1Tutorial);
+        for (int i = 0; i < 6; i++)
+        {
+            var s = LevelCatalog.Subject1Tutorial.Steps[i];
+            progress.Observe(s.AcceptIntents[0], s.RequiredDirection);
+        }
+
+        Assert.Equal(TutorialObservation.Advanced, progress.Observe(Intents.Brake, 0));
+        Assert.Equal("倒车", progress.Current!.Title);
+    }
+
+    [Fact]
     public void 教学关拆成九步_覆盖issue要求的练习序列()
     {
         var steps = LevelCatalog.Subject1Tutorial.Steps;

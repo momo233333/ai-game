@@ -42,6 +42,16 @@ namespace Copilot.Core.Levels
 
         /// <summary>学员做出这些动作中的任一个就算这一步过了。</summary>
         public IReadOnlyList<string> AcceptIntents { get; }
+
+        /// <summary>
+        /// **这一步是否把「降速类说法 + ACCELERATE」也当成减速**（目前只有「减速」那一步）。
+        ///
+        /// 为什么要它：教练说「慢一点」时，程序给的是 `ACCELERATE` + Unity 侧的"按当前车速打六折"定速 ——
+        /// 车**确实在减速**，但意图不是 `BRAKE`。关卡的判据要是只认 `BRAKE`，玩家就会被自己的
+        /// WhyWrong 提示（那条提示正好写着"说「减速」或「慢一点」"）带进沟里。
+        /// 反过来也不能无条件收 `ACCELERATE` —— 那样「给油」「直行」也会让"减速"这一步过关。
+        /// </summary>
+        public bool AcceptSlowRequest { get; set; }
     }
 
     /// <summary>关卡定义。科目一到科目四共用这个结构。</summary>
@@ -118,8 +128,13 @@ namespace Copilot.Core.Levels
                     1, Intents.LaneChange, Intents.TurnRight),
 
                 new TutorialStep("减速", "到停止线前，让她把速度降下来。", "减速",
-                    "刹车真的踩下去了", "她要的是减速 —— 说「减速」或「慢一点」。",
-                    0, Intents.Brake),
+                    "车速真的降下来了（说「减速」「刹车」或者「慢一点」都算）",
+                    "她要的是减速 —— 说「减速」「刹车」，或者「慢一点」。",
+                    0, Intents.Brake)
+                {
+                    // 「慢一点」走的是 ACCELERATE + 定速降速，车确实在减速 —— 也算过（见 AcceptSlowRequest）
+                    AcceptSlowRequest = true,
+                },
 
                 new TutorialStep("倒车", "开到库位前，让她慢慢往后倒。", "倒车，慢慢往后倒",
                     "车真的往后走（油门为负）", "她还没往后走 —— 说「倒车」或「往后倒一点」。",
@@ -217,7 +232,11 @@ namespace Copilot.Core.Levels
         /// </summary>
         /// <param name="intent">学员实际做出的意图。</param>
         /// <param name="direction">转向符号：−1 左 / +1 右 / 0 不明（见 <see cref="Intents.ParseDirection"/>）。</param>
-        public TutorialObservation Observe(string? intent, int direction)
+        /// <param name="slowRequest">
+        /// 教练这一句是不是**降速类说法**（「慢一点」「开慢点」…，见 <see cref="Intents.IsSlowRequest"/>）。
+        /// 只有「减速」那一步用得到它 —— 那种说法给的是 `ACCELERATE`，但车确实在减速（见 <see cref="TutorialStep.AcceptSlowRequest"/>）。
+        /// </param>
+        public TutorialObservation Observe(string? intent, int direction, bool slowRequest = false)
         {
             if (IsCompleted || string.IsNullOrEmpty(intent)) return TutorialObservation.NotApplicable;
 
@@ -231,6 +250,13 @@ namespace Copilot.Core.Levels
                     matched = true;
                     break;
                 }
+            }
+
+            // 「慢一点」这条路：意图是 ACCELERATE，但 Unity 侧会把定速目标打到当前车速的六折，车真的在减速
+            if (!matched && step.AcceptSlowRequest && slowRequest
+                && string.Equals(intent, Intents.Accelerate, StringComparison.Ordinal))
+            {
+                matched = true;
             }
 
             if (!matched)
