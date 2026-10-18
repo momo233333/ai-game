@@ -108,12 +108,12 @@ function Fetch-Llm {
 
 # ---------------------------------------------------------------- TTS
 function Fetch-Tts {
-    # vits-zh-hf-eula: a Chinese single-speaker female voice (116MB). Native rate 44100Hz;
+    # sherpa-onnx-vits-zh-ll: a Chinese multi-speaker voice (5 speakers, 113MB). Native rate 16000Hz;
     # the service resamples to 24000 (see SherpaVitsRealtimeTts.SampleRate).
-    # Was melo-tts zh_en before, but that one is single-speaker with a neutral timbre;
-    # the user picked eula after an A/B listen (see 开发进度 log AE).
-    $dirName = 'vits-zh-hf-eula'
-    $modelName = 'eula.onnx'   # NOTE: this model's onnx file is NOT called model.onnx
+    # Was melo-tts, then eula; the user picked this one (speakerId=2) after an A/B listen
+    # (see logs/voice_candidates and 开发进度 log AG).
+    $dirName = 'sherpa-onnx-vits-zh-ll'
+    $modelName = 'model.onnx'
     $target = Join-Path $modelsDir $dirName
     $model = Join-Path $target $modelName
 
@@ -122,9 +122,9 @@ function Fetch-Tts {
         return
     }
 
-    $asset = 'vits-zh-hf-eula.tar.bz2'
+    $asset = 'sherpa-onnx-vits-zh-ll.tar.bz2'
     $tarball = Join-Path $modelsDir $asset
-    Get-File ($GitHubProxy + 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/' + $asset) $tarball 120MB
+    Get-File ($GitHubProxy + 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/' + $asset) $tarball 100MB
 
     Write-Step "TTS: extracting $asset"
     New-Item -ItemType Directory -Force -Path $target | Out-Null
@@ -133,6 +133,7 @@ function Fetch-Tts {
 
     Remove-Item $tarball -Force
     Write-Host "    [ok]   extracted to models\$dirName" -ForegroundColor Green
+    Write-Host "    note: appsettings.json 的 tts.vits 已指向这里（speakerId=2）；换说话人只需改 speakerId 再 --synth-voicelib 重录。" -ForegroundColor DarkGray
 }
 
 switch ($Only) {

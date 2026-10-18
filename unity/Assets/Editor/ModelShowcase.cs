@@ -59,12 +59,51 @@ namespace Copilot.EditorTools
             var holder = SceneBuilder.PlaceModel(prefab, tag, ground, 1f);
             var b = SceneBuilder.BoundsInSpace(ground, holder);
 
+            // 坐标参考物放在**所有视角都会看到**的地方（地面上的 +Z 红 / −Z 蓝 / +X 绿 三块）：
+            // 单看侧视图很难判断"座椅和仪表台哪边是车头"，有了色块就有了绝对方向。
+            MakeMarker(ground, new Vector3(0f, 0.02f, b.max.z + 0.22f), Color.red);
+            MakeMarker(ground, new Vector3(0f, 0.02f, b.min.z - 0.22f), Color.blue);
+            MakeMarker(ground, new Vector3(b.max.x + 0.22f, 0.02f, 0f), Color.green);
+
             Shoot(ground, b, new Vector3(0f, 0.35f, -1f), $"logs/model_{tag}_minus_z.png");
             Shoot(ground, b, new Vector3(0f, 0.35f, 1f), $"logs/model_{tag}_plus_z.png");
             Shoot(ground, b, new Vector3(1f, 0.35f, -0.15f), $"logs/model_{tag}_plus_x.png");
+            ShootTop(ground, b, tag);
 
             Object.DestroyImmediate(holder);
             Object.DestroyImmediate(ground.gameObject);
+        }
+
+        /// <summary>
+        /// **俯视图 + 坐标参考物**：模型是"一整套座舱塞进一个 mesh"，光看侧视很难判断
+        /// 「哪边是车头、座椅在哪、仪表台在哪」。所以在地面标三个色块（+Z 红 / −Z 蓝 / +X 绿），
+        /// 再从正上方拍 —— 画面里红块那一侧就是模型的 +Z。据此才敢定"转 180° 还是不用转"。
+        /// 相机用 <c>Euler(90,0,0)</c>：就是把 +Z 当成画面上方、+X 当成画面右方的标准俯视。
+        /// </summary>
+        static void ShootTop(Transform space, Bounds b, string tag)
+        {
+            var camGo = new GameObject("TopCam", typeof(Camera));
+            var cam = camGo.GetComponent<Camera>();
+            cam.fieldOfView = 40f;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.13f, 0.15f, 0.18f);
+            cam.nearClipPlane = 0.02f;
+            camGo.transform.position = space.TransformPoint(b.center) + new Vector3(0.001f, 2.5f, 0f);
+            camGo.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+            Render(cam, $"logs/model_{tag}_top.png");
+            Object.DestroyImmediate(camGo);
+        }
+
+        static void MakeMarker(Transform parent, Vector3 localPos, Color color)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.name = "Marker";
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = new Vector3(0.12f, 0.02f, 0.12f);
+            go.GetComponent<Renderer>().material.color = color;
         }
 
         /// <summary>相机沿 <paramref name="dir"/> 退到刚好装下 <paramref name="b"/>（含 15% 余量）的位置。</summary>
@@ -83,6 +122,13 @@ namespace Copilot.EditorTools
             camGo.transform.position = target + dir.normalized * dist;
             camGo.transform.LookAt(target);
 
+            Render(cam, relativePath);
+            Object.DestroyImmediate(camGo);
+        }
+
+        /// <summary>渲一帧存 PNG（1024×768，只做预览用）。</summary>
+        static void Render(Camera cam, string relativePath)
+        {
             var rt = new RenderTexture(1024, 768, 24, RenderTextureFormat.ARGB32);
             cam.targetTexture = rt;
             cam.Render();
@@ -96,12 +142,11 @@ namespace Copilot.EditorTools
             var path = RepoPath(relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
             File.WriteAllBytes(path, png);
-            Debug.Log($"[ModelShowcase] {path}（bounds={b.size} dist={dist:0.00}）");
+            Debug.Log($"[ModelShowcase] {path}（{png.Length / 1024} KB）");
 
             Object.DestroyImmediate(tex);
             cam.targetTexture = null;
             Object.DestroyImmediate(rt);
-            Object.DestroyImmediate(camGo);
         }
 
         static string RepoPath(string relative)

@@ -60,6 +60,7 @@ namespace Copilot.EditorTools
         const string PreviewRelativePath = "logs/unity_scene_preview.png";
         const string DriverPreviewRelativePath = "logs/unity_scene_preview_driver.png";
         const string SettlePreviewRelativePath = "logs/unity_scene_preview_settle.png";
+        const string SeatPreviewRelativePath = "logs/unity_scene_preview_seat.png";
 
         const string RigName = "CopilotRig";
         const string CarName = "Car";
@@ -80,36 +81,66 @@ namespace Copilot.EditorTools
         const string SisterModelAsset = "Assets/Models/AI/sister/sister.fbx";
         const string InteriorModelAsset = "Assets/Models/AI/interior/interior.fbx";
 
-        // ---- 车舱尺寸：用真模型之后按真实比例抬高 ----------------------------
-        // 原来地板 0.885 / 车顶 1.52 → 净高只有 0.63m，装不下按合理比例缩放的内饰（要 ~1.05m）。
-        const float CabinFloorY = 0.885f;
-        const float CabinRoofY = 1.95f;
+        // ---- 车舱尺寸：**按真车来**（长 4.15 / 宽 1.80 / 高 1.48）----------------
+        // 老版本的 0.885/1.95 是"空盒子上盖小屋"：地板离地 0.885、车顶 1.95，
+        // 净高 1.065 却是个厢式货车车厢 —— 于是真内饰只能放大到 1.36 去"填满"它，
+        // 座垫被顶到 1.48、人眼该在 2.03（比车顶还高），相机只能挤在座垫边上
+        // （用户反馈的"画面位置不对""像坐在大座椅里的小孩"就是这么来的）。
+        // 真车三根线：**地板 0.40 / 腰线（侧窗下沿）0.91 / 车顶 1.48**。
+        /// <summary>车内地板（地毯面）高度：真车地板离地约 0.40。</summary>
+        const float CabinFloorY = 0.40f;
+        /// <summary>腰线（侧窗下沿）：门内衬砌到这里为止，上面就是侧窗开口。</summary>
+        const float BeltLineY = 0.91f;
+        /// <summary>车顶板高度：真车车高 1.48。</summary>
+        const float CabinRoofY = 1.48f;
 
-        // ---- 真模型摆放（数字都按导入体检的实测尺寸算：内饰 1.12×0.77×0.57，妹妹 0.83×0.86×0.69）----
-        /// <summary>内饰缩放：模型舱宽 1.12 → 车舱内宽 ≈1.52（车身 1.74 内收一点），模型高 0.77 → 1.05。</summary>
-        const float InteriorModelScale = 1.36f;
-        /// <summary>内饰**底心**落点（车体局部）：底坐在车内地板上，仪表台前沿贴前挡上沿（z≈1.0）。</summary>
-        static readonly Vector3 InteriorModelAnchor = new Vector3(0f, CabinFloorY, 0.62f);
-        /// <summary>内饰朝向：模型车头是 −Z，转 180° 对上我们的 +Z。</summary>
+        // ---- 真模型摆放（数字来自 `ModelProbe` 实测：顶面高度分桶 + 顶面高度网格图）----------------
+        // 内饰模型**本身就是 1:1 真比例**（地板面在模型底上方 0.13、座垫顶 0.44、仪表台顶 0.56
+        // —— 座垫离地板 0.31 ≈ 真车 0.32）。所以**按 1.0 用**，绝不能放大去"填满车厢"。
+        // 朝向：模型车头朝 −Z（仪表台在 −z 端），我们的车头是 +Z ⇒ 绕 Y 转 180°。
+        /// <summary>内饰缩放：**1.0 = 该模型的真实比例**。</summary>
+        const float InteriorModelScale = 1f;
+        /// <summary>
+        /// 内饰**底心**落点：模型地板面（底上方 0.13）压在我们的车内地板（<see cref="CabinFloorY"/>=0.40）上
+        /// ⇒ 底心 y = 0.40 − 0.13 = **0.27**。z 让仪表台顶面（模型 −z 端）落在前挡下沿：
+        /// 模型 z ∈ [−0.291, 0.275]（映射：车 z = anchor.z − 0.01 − 模型 z），
+        /// 取 0.56 ⇒ 仪表台前缘在车 z ≈ 0.84（前挡下沿 0.88），模型后裁口在车 z ≈ 0.275（副驾座垫下方，
+        /// 并被我们自己的地板板盖住）。
+        /// </summary>
+        static readonly Vector3 InteriorModelAnchor = new Vector3(0f, 0.27f, 0.56f);
+        /// <summary>内饰朝向：模型车头朝 −Z，转 180° 对上我们的 +Z。</summary>
         static readonly Vector3 InteriorModelEuler = new Vector3(0f, 180f, 0f);
 
         /// <summary>
-        /// 妹妹缩放：整体收到 0.85 → 0.73m 高（车舱净高 1.065）。
-        /// **故意比内饰小一号**：她的座椅/方向盘才藏得进内饰那套里（等于"小雅是个小个子"）。
+        /// 妹妹缩放：她那份（人 + 驾驶座 + 方向盘 + 一小截仪表台）与内饰**同一辆车、同一比例**
+        /// ⇒ 也按 1.0。只收一点点（0.96）让自带的座椅/方向盘缩进内饰那套里藏住重叠面。
         /// </summary>
-        const float SisterModelScale = 0.85f;
+        const float SisterModelScale = 0.96f;
         /// <summary>妹妹朝向：模型面向 +X，转 −90° 对上我们的 +Z。</summary>
         static readonly Vector3 SisterModelEuler = new Vector3(0f, -90f, 0f);
-        /// <summary>妹妹**底心**落点（车体局部）：和内饰同一个"车内地板"基准，驾驶位一侧。</summary>
-        static readonly Vector3 SisterModelAnchor = new Vector3(-0.42f, CabinFloorY, 0.28f);
+        /// <summary>
+        /// 妹妹**底心**落点：与内饰同一个"车内地板"基准（y = 0.27）。
+        /// x/z 让她的**座垫**落在驾驶座、同时**她的方向盘**与内饰那只见面
+        /// （映射：车 x = anchor.x − 0.013 − 模型 z，车 z = anchor.z + 0.134 + 模型 x）：
+        /// 她的座垫在模型 (x −0.35, z −0.06) ⇒ 取 z = 0.48 时她的臀点落在车 z ≈ 0.26（与副驾同排），
+        /// 她的方向盘（模型 x 0.10）落在车 z ≈ 0.71（真车方向盘就在臀点前 0.45）。
+        /// </summary>
+        static readonly Vector3 SisterModelAnchor = new Vector3(-0.22f, 0.27f, 0.48f);
 
-        // ---- 方向盘（三个数字都按"真车盘 ≈ 0.38m、中心在座垫上方 0.5m、前倾 20°"给）----
-        /// <summary>方向盘中心（车体局部）。真内饰在用时，这一层只是"盖在模型那个不能动的盘上"的示意层。</summary>
-        static readonly Vector3 WheelAnchor = new Vector3(-0.42f, CabinFloorY + 0.50f, 0.78f);
-        /// <summary>盘径：0.40 接近真车（0.38）。做太大在真内饰里会盖住中控。</summary>
-        const float WheelDiameter = 0.40f;
-        /// <summary>前倾角：真车盘面不是竖直的，大约 20~25°。挂在子物体上（根的 rotation 归 SteeringWheel 用）。</summary>
+        // ---- 方向盘：模型自带那个驱不动，这层只做"能看出转动"的示意 ----
+        /// <summary>盘心：车 x −0.28（驾驶位）、y 0.66（模型实测盘心 = 地板面 +0.39）、z 0.71（臀点前 0.45）。</summary>
+        static readonly Vector3 WheelAnchor = new Vector3(-0.28f, 0.66f, 0.71f);
+        /// <summary>盘径：真车 ≈0.38。</summary>
+        const float WheelDiameter = 0.38f;
+        /// <summary>前倾角：真车盘面不是竖直的，大约 20~25°（挂在子物体上，根的 rotation 归 SteeringWheel 用）。</summary>
         const float WheelTiltPitch = -22f;
+
+        /// <summary>
+        /// **副驾**（相机）落点：按实测坐姿算 —— 座垫顶面 = 地板面 + 0.31 = **0.71**，
+        /// 坐姿眼高 ≈ 座垫 + 0.55 = **1.26**（真车眼高就是 1.2 上下）；x 取副驾座（车 x ≈ +0.25），
+        /// z 取臀点（车 z 0.28）往后 0.15 ⇒ **0.13**（真车眼位就在臀点后上方，风挡下沿在它前方 ~0.75）。
+        /// </summary>
+        static readonly Vector3 CockpitCameraAnchor = new Vector3(0.25f, 1.26f, 0.13f);
 
         /// <summary>固定随机种子：每次生成的楼群/道具布局完全一致，便于对比与回归。</summary>
         const int Seed = 20261011;
@@ -675,42 +706,53 @@ namespace Copilot.EditorTools
             EnsureModelTextures(InteriorModelAsset);
             var interiorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(InteriorModelAsset);
 
-            // 顶棚 / 后隔板 / 两侧门板 / A 柱 / 前挡上沿 —— **车壳永远由代码拼**：
-            // 真内饰里没有车顶，而且这几个件的高度必须跟着 CabinRoofY 走。
-            Box("Roof", car, new Vector3(0f, CabinRoofY, -0.15f), new Vector3(1.68f, 0.07f, 2.1f), _cabinTrim, withCollider: false);
-            Box("RearBulkhead", car, new Vector3(0f, (CabinFloorY + CabinRoofY) * 0.5f, -1.42f),
-                new Vector3(1.66f, CabinRoofY - CabinFloorY, 0.08f), _cabinTrim, withCollider: false);
+            // 车内地毯：铺在底板（FloorPan 顶面 0.385）之上、又**比真模型自带的地板面（0.40）低 5mm** ——
+            // 两层刻意错开，否则同高会 z-fighting 闪。
+            Box("Floor", car, new Vector3(0f, 0.39f, 0.15f), new Vector3(1.74f, 0.01f, 1.50f), _dash, withCollider: false);
+
+            // 门内衬：**只砌到腰线**（0.91），腰线以上留空 = 侧窗开口。
+            // 老版本是从地板一路砌到车顶的整面墙 —— 玩家扭头看学员时正对着一堵墙，"坐在盒子里"就是这么来的。
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                Box("DoorPanel", car, new Vector3(sx * 0.86f, (CabinFloorY + CabinRoofY) * 0.5f, -0.2f),
-                    new Vector3(0.06f, CabinRoofY - CabinFloorY, 2.0f), _cabinTrim, withCollider: false);
-                Box("APillar", car, new Vector3(sx * 0.74f, CabinRoofY - 0.3f, 0.92f),
-                    new Vector3(0.1f, 0.6f, 0.1f), _cabinTrim, withCollider: false);
+                Box("DoorTrim", car, new Vector3(sx * 0.81f, (CabinFloorY + BeltLineY) * 0.5f, -0.1f),
+                    new Vector3(0.06f, BeltLineY - CabinFloorY, 2.4f), _cabinTrim, withCollider: false);
             }
-            Box("Header", car, new Vector3(0f, CabinRoofY - 0.02f, 1.0f), new Vector3(1.62f, 0.1f, 0.1f), _cabinTrim, withCollider: false);
 
-            // 车内地板：车身的顶面（红色）同时也是引擎盖，不加这块的话座位前方会是一片红
-            Box("Floor", car, new Vector3(0f, CabinFloorY, -0.25f), new Vector3(1.66f, 0.02f, 2.1f), _dash, withCollider: false);
+            // 顶棚内衬：贴在车顶板（BuildCarBody 拼的那块，底面 1.41）**下面**，别和它同高；
+            // 一直铺到 z 0.63，把前挡上沿（Header）的内表面也盖住 —— 否则坐在副驾抬头能看到一条车漆红。
+            Box("RoofLiner", car, new Vector3(0f, CabinRoofY - 0.105f, -0.20f), new Vector3(1.60f, 0.04f, 1.66f), _cabinTrim, withCollider: false);
+            // A 柱内衬：立柱本身是车漆色（外面看要一致），但车里那一面在真车上是内饰色 ——
+            // 副驾朝前看时右 A 柱会占掉画面右侧一大块，车漆红在那儿很假。
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Tilted("APillarTrim", car, new Vector3(sx * 0.70f, 1.18f, 0.715f),
+                    new Vector3(0.02f, 0.60f, 0.11f), _cabinTrim, -31f);
+            }
+
+            // 座舱后墙：真内饰模型在后排处被**裁断**（它只有仪表台/中控/地板/镜子，没有后排），
+            // 与其让人看见一个空货厢，不如把座舱收进前排这一截 —— 后墙放在车 z −0.58（副驾背后 0.7m）。
+            Box("RearBulkhead", car, new Vector3(0f, (CabinFloorY + CabinRoofY) * 0.5f, -0.58f),
+                new Vector3(1.62f, CabinRoofY - CabinFloorY, 0.08f), _cabinTrim, withCollider: false);
 
             if (interiorPrefab != null)
             {
-                // 真内饰：一整套前舱（仪表台 + 中控 + 挡杆 + 双座 + 方向盘 + 后视镜 + 侧镜 + A 柱）
+                // 真内饰：一整套前舱（仪表台 + 中控 + 挡杆 + 风挡框 + 后视镜 + 侧镜 + 地板/脚坑）
                 PlaceModel(interiorPrefab, "InteriorModel", car, InteriorModelScale,
                     InteriorModelAnchor, InteriorModelEuler);
             }
             else
             {
                 // 降级：模型不在 → 保留原来的灰盒仪表台/座椅/后视镜，保证没有那 117MB 资产的机器也能玩
-                Box("Dash", car, new Vector3(0f, CabinFloorY + 0.26f, 0.95f), new Vector3(1.64f, 0.24f, 0.7f), _dash, withCollider: false);
-                Box("Console", car, new Vector3(0f, CabinFloorY + 0.04f, 0.05f), new Vector3(0.34f, 0.34f, 1.4f), _console, withCollider: false);
-                Box("SteeringColumn", car, new Vector3(-0.42f, CabinFloorY + 0.26f, 0.66f), new Vector3(0.09f, 0.09f, 0.34f), _console, withCollider: false);
-                Box("MirrorStalk", car, new Vector3(0f, CabinRoofY - 0.14f, 0.86f), new Vector3(0.04f, 0.12f, 0.04f), _console, withCollider: false);
-                Box("RearViewMirror", car, new Vector3(0f, CabinRoofY - 0.2f, 0.86f), new Vector3(0.34f, 0.1f, 0.04f), _mirror, withCollider: false);
+                Box("Dash", car, new Vector3(0f, CabinFloorY + 0.26f, 0.70f), new Vector3(1.64f, 0.46f, 0.34f), _dash, withCollider: false);
+                Box("Console", car, new Vector3(0f, CabinFloorY + 0.04f, 0.15f), new Vector3(0.34f, 0.34f, 1.0f), _console, withCollider: false);
+                Box("SteeringColumn", car, new Vector3(-0.42f, CabinFloorY + 0.26f, 0.60f), new Vector3(0.09f, 0.09f, 0.34f), _console, withCollider: false);
+                Box("MirrorStalk", car, new Vector3(0f, CabinRoofY - 0.14f, 0.62f), new Vector3(0.04f, 0.12f, 0.04f), _console, withCollider: false);
+                Box("RearViewMirror", car, new Vector3(0f, CabinRoofY - 0.2f, 0.62f), new Vector3(0.34f, 0.1f, 0.04f), _mirror, withCollider: false);
                 for (int sx = -1; sx <= 1; sx += 2)
                 {
-                    float x = sx * 0.42f;
-                    Box("SeatBack", car, new Vector3(x, CabinFloorY + 0.62f, -0.62f), new Vector3(0.62f, 0.62f, 0.16f), _seat, withCollider: false);
-                    Box("SeatCushion", car, new Vector3(x, CabinFloorY + 0.30f, -0.22f), new Vector3(0.62f, 0.14f, 0.7f), _seat, withCollider: false);
+                    float x = sx * 0.30f;
+                    Box("SeatBack", car, new Vector3(x, CabinFloorY + 0.62f, 0.10f), new Vector3(0.56f, 0.62f, 0.16f), _seat, withCollider: false);
+                    Box("SeatCushion", car, new Vector3(x, CabinFloorY + 0.30f, 0.42f), new Vector3(0.56f, 0.14f, 0.50f), _seat, withCollider: false);
                 }
             }
 
@@ -744,11 +786,13 @@ namespace Copilot.EditorTools
                     Quaternion.Euler(90f, 0f, 0f), withCollider: false);
             }
 
-            // 辐条用 chrome（亮银）：**转动靠辐条才看得出来**，不然盘转了你只看到同一块东西
-            float spoke = WheelDiameter * 0.86f;
-            Box("SpokeH", tilt, new Vector3(0f, 0f, 0.02f), new Vector3(spoke, 0.04f, 0.03f), _chrome, withCollider: false);
-            Box("SpokeV", tilt, new Vector3(0f, 0f, 0.02f), new Vector3(0.04f, spoke, 0.03f), _chrome, withCollider: false);
-            Cylinder("WheelHub", tilt, new Vector3(0f, 0f, 0.03f), new Vector3(0.12f, 0.05f, 0.12f), _chrome,
+            // 辐条用 chrome（亮银）：**转动靠辐条才看得出来**，不然盘转了你只看到同一块东西。
+            // ⚠️ 辐条刻意放到盘面**往驾驶员这一侧 4cm**（tilt 局部 −z）：真模型自带的方向盘就在同一位置，
+            // 同平面会 z-fighting 闪；挪到驾驶员这侧，辐条悬在模型盘面前面，转起来清清楚楚。
+            float spoke = WheelDiameter * 0.80f;
+            Box("SpokeH", tilt, new Vector3(0f, 0f, -0.04f), new Vector3(spoke, 0.04f, 0.03f), _chrome, withCollider: false);
+            Box("SpokeV", tilt, new Vector3(0f, 0f, -0.04f), new Vector3(0.04f, spoke, 0.03f), _chrome, withCollider: false);
+            Cylinder("WheelHub", tilt, new Vector3(0f, 0f, -0.04f), new Vector3(0.12f, 0.05f, 0.12f), _chrome,
                 Quaternion.Euler(90f, 0f, 0f), withCollider: false);
 
             var wheel = wheelRoot.AddComponent<SteeringWheel>();
@@ -809,7 +853,8 @@ namespace Copilot.EditorTools
         /// <summary>降级分支：基本体拼的人形（没有真模型的机器走这条）。</summary>
         static void BuildPrimitiveAvatar(GameObject avatar, DriverAvatar driver)
         {
-            avatar.transform.localPosition = new Vector3(-0.42f, CabinFloorY + 0.32f, -0.2f);
+            // 底高 = 车内地板 + 0.28：头顶（+0.60）正好落在真车眼高 1.26 附近
+            avatar.transform.localPosition = new Vector3(-0.42f, CabinFloorY + 0.28f, -0.2f);
 
             const float torsoY = 0.24f;
 
@@ -903,25 +948,34 @@ namespace Copilot.EditorTools
         {
             var bodyMat = MakeMaterial(color);
 
-            // ⚠️ **碰撞体只留一个**（BodyLower）。其余全是视觉件，一律 withCollider:false ——
+            // ⚠️ **碰撞体只留一个**（FloorPan）。其余全是视觉件，一律 withCollider:false ——
             // 否则碰撞外形会跟着造型变化，连带改掉玩法层的撞车判定与「前方距离」测量。
-            Box("BodyLower", root, new Vector3(0f, 0.55f, 0f), new Vector3(1.80f, 0.44f, 4.15f), bodyMat);
+            //
+            // **车身下段必须做成"壳"、不能是一个实心盒子**（这是"画面不对"的另一半根因）：
+            // 实心盒子的顶面会横在座舱里当"地板"，相机往下看就是一片车漆，
+            // 真内饰（地板 0.40、座垫 0.71）整块被埋在里面看不见。
+            // 所以拆成：**底板（唯一的碰撞体）+ 两侧门板皮 + 前防火墙 + 后尾板**，
+            // 座舱中间是空的，真内饰的地板（0.40）与它对齐。
+            Box("FloorPan", root, new Vector3(0f, 0.325f, 0f), new Vector3(1.80f, 0.12f, 4.15f), bodyMat);
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                Box("SidePanel", root, new Vector3(sx * 0.87f, 0.645f, 0f), new Vector3(0.06f, 0.52f, 4.15f), bodyMat, withCollider: false);
+            }
+            Box("Firewall", root, new Vector3(0f, 0.645f, 0.88f), new Vector3(1.74f, 0.52f, 0.06f), _dash, withCollider: false);
+            Box("RearPanel", root, new Vector3(0f, 0.645f, -2.05f), new Vector3(1.74f, 0.52f, 0.06f), bodyMat, withCollider: false);
 
-            // 腰线以上的上车身（略窄，做出收分）
-            Box("BodyUpper", root, new Vector3(0f, 0.93f, -0.05f), new Vector3(1.74f, 0.34f, 3.55f), bodyMat, withCollider: false);
+            // 机舱盖 / 后备箱盖（盖面 ~0.90，与腰线齐平 —— 真车的机舱盖就在这个高度）
+            Tilted("Hood", root, new Vector3(0f, 0.89f, 1.475f), new Vector3(1.62f, 0.10f, 1.25f), bodyMat, -2f);
+            Tilted("Trunk", root, new Vector3(0f, 0.89f, -1.825f), new Vector3(1.60f, 0.10f, 0.55f), bodyMat, 2f);
 
             // 前悬 / 车头：向车头收窄 + 保险杠下沿
-            Box("Nose", root, new Vector3(0f, 0.66f, 1.95f), new Vector3(1.66f, 0.30f, 0.60f), bodyMat, withCollider: false);
-            Box("FrontBumper", root, new Vector3(0f, 0.48f, 2.16f), new Vector3(1.78f, 0.30f, 0.24f), _bumper, withCollider: false);
-            Box("Grille", root, new Vector3(0f, 0.68f, 2.25f), new Vector3(1.05f, 0.18f, 0.06f), _grille, withCollider: false);
-
-            // 机舱盖（带一点前倾）与后备箱盖
-            Tilted("Hood", root, new Vector3(0f, 0.99f, 1.32f), new Vector3(1.62f, 0.13f, 1.55f), bodyMat, -3f);
-            Tilted("Trunk", root, new Vector3(0f, 0.99f, -1.45f), new Vector3(1.60f, 0.13f, 1.15f), bodyMat, 2.5f);
+            Box("Nose", root, new Vector3(0f, 0.70f, 1.90f), new Vector3(1.66f, 0.36f, 0.50f), bodyMat, withCollider: false);
+            Box("FrontBumper", root, new Vector3(0f, 0.48f, 2.14f), new Vector3(1.78f, 0.32f, 0.26f), _bumper, withCollider: false);
+            Box("Grille", root, new Vector3(0f, 0.68f, 2.14f), new Vector3(1.05f, 0.16f, 0.06f), _grille, withCollider: false);
 
             // 后悬 + 后保险杠
-            Box("Tail", root, new Vector3(0f, 0.68f, -1.98f), new Vector3(1.64f, 0.32f, 0.55f), bodyMat, withCollider: false);
-            Box("RearBumper", root, new Vector3(0f, 0.50f, -2.16f), new Vector3(1.76f, 0.30f, 0.24f), _bumper, withCollider: false);
+            Box("Tail", root, new Vector3(0f, 0.72f, -1.95f), new Vector3(1.64f, 0.38f, 0.50f), bodyMat, withCollider: false);
+            Box("RearBumper", root, new Vector3(0f, 0.50f, -2.14f), new Vector3(1.76f, 0.32f, 0.26f), _bumper, withCollider: false);
 
             // 轮拱（四个鼓包，让轮子"长在车身上"而不是贴在外面）
             const float halfTrack = 0.85f;
@@ -929,55 +983,68 @@ namespace Copilot.EditorTools
             {
                 for (int sz = -1; sz <= 1; sz += 2)
                 {
-                    Sphere("Fender", root, new Vector3(sx * (halfTrack - 0.16f), 0.60f, sz * 1.35f),
-                        new Vector3(0.62f, 0.42f, 0.86f), bodyMat, withCollider: false);
+                    Sphere("Fender", root, new Vector3(sx * (halfTrack - 0.16f), 0.58f, sz * 1.35f),
+                        new Vector3(0.60f, 0.46f, 0.92f), bodyMat, withCollider: false);
                 }
             }
 
             // 侧裙 / 门缝：一条深色腰线把车身"切开"，避免整块车漆糊成一片
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                Box("SideSkirt", root, new Vector3(sx * 0.905f, 0.42f, 0.05f), new Vector3(0.03f, 0.16f, 3.2f), _bumper, withCollider: false);
-                Box("DoorSeam", root, new Vector3(sx * 0.912f, 0.80f, -0.15f), new Vector3(0.02f, 0.42f, 0.03f), _grille, withCollider: false);
+                Box("SideSkirt", root, new Vector3(sx * 0.905f, 0.38f, 0.05f), new Vector3(0.03f, 0.16f, 3.2f), _bumper, withCollider: false);
+                Box("DoorSeam", root, new Vector3(sx * 0.912f, 0.72f, -0.15f), new Vector3(0.02f, 0.42f, 0.03f), _grille, withCollider: false);
+            }
+
+            // ---- 玻璃房：车顶 + 三对立柱（**两种车共用这套骨架**）----
+            // 玩家车只搭骨架（侧窗/前挡留空 → 相机在里面能看出去，配 CreateInterior 的中空座舱）；
+            // 配车/危险车再把玻璃与实心舱壁补上 —— 它们只是背景道具，没必要做第二套造型。
+            Box("Roof", root, new Vector3(0f, CabinRoofY - 0.035f, -0.25f), new Vector3(1.66f, 0.07f, 1.60f), bodyMat, withCollider: false);
+            Box("Header", root, new Vector3(0f, CabinRoofY - 0.05f, 0.55f), new Vector3(1.62f, 0.10f, 0.14f), bodyMat, withCollider: false);
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                // A 柱：从风挡下沿（z 0.88 / y 0.91）斜到车顶前缘（z 0.55 / y 1.45）
+                Tilted("APillar", root, new Vector3(sx * 0.76f, 1.18f, 0.715f), new Vector3(0.11f, 0.64f, 0.13f), bodyMat, -31f);
+                // B 柱：车窗中间那道竖柱
+                Box("BPillar", root, new Vector3(sx * 0.78f, 1.18f, -0.30f), new Vector3(0.09f, 0.56f, 0.16f), bodyMat, withCollider: false);
+                // C 柱：从车顶后缘（z −1.05）斜到后备箱面（z −1.55）
+                Tilted("CPillar", root, new Vector3(sx * 0.76f, 1.18f, -1.30f), new Vector3(0.11f, 0.74f, 0.13f), bodyMat, 43f);
             }
 
             if (!openCabin)
             {
                 // 整块驾驶舱（路边停车/危险车用；玩家的车由 CreateInterior 拼中空座舱）
-                Box("Cabin", root, new Vector3(0f, 1.18f, -0.30f), new Vector3(1.58f, 0.50f, 1.95f), bodyMat, withCollider: false);
+                Box("Cabin", root, new Vector3(0f, 1.18f, -0.35f), new Vector3(1.62f, 0.54f, 1.80f), bodyMat, withCollider: false);
 
                 // 玻璃都带倾角，不再是插在盒子上的平板
-                Tilted("Windshield", root, new Vector3(0f, 1.14f, 0.80f), new Vector3(1.46f, 0.52f, 0.05f), _glass, -24f);
-                Tilted("RearGlass", root, new Vector3(0f, 1.14f, -1.30f), new Vector3(1.44f, 0.46f, 0.05f), _glass, 20f);
+                Tilted("Windshield", root, new Vector3(0f, 1.18f, 0.715f), new Vector3(1.50f, 0.62f, 0.05f), _glass, -31f);
+                Tilted("RearGlass", root, new Vector3(0f, 1.18f, -1.30f), new Vector3(1.48f, 0.72f, 0.05f), _glass, 43f);
                 for (int sx = -1; sx <= 1; sx += 2)
                 {
-                    Tilted("SideGlass", root, new Vector3(sx * 0.80f, 1.16f, 0.05f), new Vector3(0.04f, 0.40f, 1.55f), _glass, 0f);
-                    Box("APillar", root, new Vector3(sx * 0.80f, 1.14f, 0.92f), new Vector3(0.06f, 0.52f, 0.10f), bodyMat, withCollider: false);
-                    Box("CPillar", root, new Vector3(sx * 0.80f, 1.14f, -1.20f), new Vector3(0.06f, 0.48f, 0.12f), bodyMat, withCollider: false);
+                    Tilted("SideGlass", root, new Vector3(sx * 0.79f, 1.18f, -0.35f), new Vector3(0.04f, 0.50f, 1.60f), _glass, 0f);
                 }
             }
 
             // 灯组：灯罩 + 发光件（前后各一对）
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                Box("HeadHouse", root, new Vector3(sx * 0.62f, 0.80f, 2.16f), new Vector3(0.44f, 0.20f, 0.10f), _grille, withCollider: false);
-                Box(sx < 0 ? "HeadL" : "HeadR", root, new Vector3(sx * 0.62f, 0.80f, 2.22f), new Vector3(0.34f, 0.13f, 0.04f), _lightFront, withCollider: false);
+                Box("HeadHouse", root, new Vector3(sx * 0.62f, 0.78f, 2.12f), new Vector3(0.44f, 0.20f, 0.10f), _grille, withCollider: false);
+                Box(sx < 0 ? "HeadL" : "HeadR", root, new Vector3(sx * 0.62f, 0.78f, 2.18f), new Vector3(0.34f, 0.13f, 0.04f), _lightFront, withCollider: false);
 
-                Box("TailHouse", root, new Vector3(sx * 0.60f, 0.84f, -2.17f), new Vector3(0.42f, 0.18f, 0.09f), _grille, withCollider: false);
-                Box(sx < 0 ? "TailL" : "TailR", root, new Vector3(sx * 0.60f, 0.84f, -2.22f), new Vector3(0.32f, 0.12f, 0.04f), _lightRear, withCollider: false);
+                Box("TailHouse", root, new Vector3(sx * 0.60f, 0.80f, -2.10f), new Vector3(0.42f, 0.18f, 0.09f), _grille, withCollider: false);
+                Box(sx < 0 ? "TailL" : "TailR", root, new Vector3(sx * 0.60f, 0.80f, -2.16f), new Vector3(0.32f, 0.12f, 0.04f), _lightRear, withCollider: false);
             }
 
-            // 后视镜（杆 + 镜片）
+            // 后视镜（杆 + 镜片）—— 挂在腰线上方一点点，别吊在车顶高度（那是厢式车的镜子）
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                Cylinder("MirrorStalk", root, new Vector3(sx * 0.95f, 1.14f, 0.55f), new Vector3(0.05f, 0.10f, 0.05f), _bumper,
+                Cylinder("MirrorStalk", root, new Vector3(sx * 0.95f, 1.02f, 0.62f), new Vector3(0.05f, 0.10f, 0.05f), _bumper,
                     Quaternion.Euler(0f, 0f, sx * 35f), withCollider: false);
-                Box(sx < 0 ? "MirrorL" : "MirrorR", root, new Vector3(sx * 1.06f, 1.16f, 0.52f), new Vector3(0.09f, 0.15f, 0.06f), _mirror, withCollider: false);
+                Box(sx < 0 ? "MirrorL" : "MirrorR", root, new Vector3(sx * 1.06f, 1.04f, 0.59f), new Vector3(0.09f, 0.15f, 0.06f), _mirror, withCollider: false);
             }
 
             // 车牌
-            Box("PlateFront", root, new Vector3(0f, 0.58f, 2.29f), new Vector3(0.44f, 0.12f, 0.03f), _plate, withCollider: false);
-            Box("PlateRear", root, new Vector3(0f, 0.60f, -2.29f), new Vector3(0.44f, 0.12f, 0.03f), _plate, withCollider: false);
+            Box("PlateFront", root, new Vector3(0f, 0.52f, 2.27f), new Vector3(0.44f, 0.12f, 0.03f), _plate, withCollider: false);
+            Box("PlateRear", root, new Vector3(0f, 0.54f, -2.27f), new Vector3(0.44f, 0.12f, 0.03f), _plate, withCollider: false);
 
             if (!withWheels) return;
 
@@ -1078,10 +1145,9 @@ namespace Copilot.EditorTools
             var go = new GameObject("Main Camera");
             go.tag = "MainCamera";
             go.transform.SetParent(car, false);
-            // 相机再往右后挪一点、并朝驾驶位偏 12°，这样正前方就能同时看到路和学员的侧脸
-            // 高度跟着车舱抬高（原来 1.26 是给 1.52 的低车顶配的坐姿）——
-            // 现在地板 0.885 / 车顶 1.95，坐姿眼高 ≈ 地板 + 0.85。
-            go.transform.localPosition = new Vector3(0.52f, CabinFloorY + 0.84f, 0.30f);   // 副驾座（左舵车：驾驶位在 x<0）
+            // 相机位置 = 实测坐姿算出来的副驾眼位（见 CockpitCameraAnchor 注释），
+            // 不再用"地板 + 0.84"这种估法 —— 之前它把眼睛放在离座垫只有 0.16m 的地方，像坐在大座椅里的小孩。
+            go.transform.localPosition = CockpitCameraAnchor;
             go.transform.localRotation = Quaternion.identity;
 
             var cam = go.AddComponent<Camera>();
@@ -1766,6 +1832,11 @@ namespace Copilot.EditorTools
             ShowcaseSettlement(gameplayHud, true);
             CaptureView(cam, Quaternion.Euler(0f, restYaw, 0f), SettlePreviewRelativePath);
             ShowcaseSettlement(gameplayHud, false);
+
+            // 驾驶位特写：**低头看左边**（yaw −55° / pitch +28°；Unity 相机 pitch 为正 = 往下看）——
+            // 玩家平时看不到这块，但"学员坐没坐正、手有没有搭在盘上、盘高不高"只有这个角度能看清
+            // （正面那张全被仪表台挡着）。
+            CaptureView(cam, Quaternion.Euler(28f, -55f, 0f), SeatPreviewRelativePath);
 
             return forward;
         }
