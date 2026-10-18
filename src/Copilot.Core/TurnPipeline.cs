@@ -76,6 +76,7 @@ namespace Copilot.Core
                 yield return TurnEvent.LlmDelta(RejectLine);
                 yield return BuildTtsEvent(null, RejectLine, rejectAction.Intent, state.Emotion);
                 yield return ApplyState(0f, "玩家说了敏感内容");
+                _memory.NoteIntent(rejectAction.Intent);
                 _memory.AddTurn(text ?? string.Empty, RejectLine);
                 yield break;
             }
@@ -214,6 +215,8 @@ namespace Copilot.Core
             if (guard.Intercepted) delta = Math.Min(delta, -2f);
             yield return ApplyState(delta, $"玩家：{text}");
 
+            // 7) 话题度：这一轮算不算跑题，决定**下一轮**提示里那句「该收一收了」（见 DialogueMemory.NoteIntent）
+            _memory.NoteIntent(guard.Action.Intent);
             _memory.AddTurn(text ?? string.Empty, reply);
         }
 

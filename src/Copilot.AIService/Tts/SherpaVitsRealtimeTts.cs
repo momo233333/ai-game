@@ -13,10 +13,11 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
 {
     private readonly OfflineTts _tts;
     private readonly int _targetSampleRate;
-    /// <summary>多说话人模型选哪个嗓音（见 <c>Config.TtsOptions.VitsOptions.SpeakerId</c>）。</summary>
+    /// <summary>多说话人模型选哪个嗓音（见 <c>Config.TtsOptions.VitsOptions.SpeakerId</c> / Kokoro 同名字段）。</summary>
     private readonly int _speakerId;
+    private readonly string _name;
 
-    public string Name => "sherpa-vits";
+    public string Name => _name;
     public bool IsAvailable => true;
 
     /// <summary>
@@ -26,16 +27,27 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
     /// </summary>
     public int SampleRate => _targetSampleRate;
 
-    private SherpaVitsRealtimeTts(OfflineTts tts, int targetSampleRate, int speakerId)
+    private SherpaVitsRealtimeTts(OfflineTts tts, int targetSampleRate, int speakerId, string name)
     {
         _tts = tts;
         _targetSampleRate = targetSampleRate;
         _speakerId = speakerId < 0 ? 0 : speakerId;
+        _name = name;
     }
 
-    public static SherpaVitsRealtimeTts? TryCreate(Config.TtsOptions.VitsOptions options, string modelsDir,
+    /// <summary>
+    /// 建一个 sherpa-onnx 实时合成器：**配了 Kokoro 就用 Kokoro，否则走 VITS**。
+    /// （两者都是 sherpa-onnx 的离线 TTS，只是模型与配置段不同；Kokoro 中文更自然一点。）
+    /// </summary>
+    public static SherpaVitsRealtimeTts? TryCreate(Config.TtsOptions tts, string modelsDir,
         int targetSampleRate, out string reason)
     {
+        if (tts.Kokoro != null && !string.IsNullOrWhiteSpace(tts.Kokoro.Model))
+        {
+            return TryCreateKokoro(tts.Kokoro, modelsDir, targetSampleRate, out reason);
+        }
+
+        var options = tts.Vits;
         string model = Resolve(modelsDir, options.Model);
         string tokens = Resolve(modelsDir, options.Tokens);
         string lexicon = Resolve(modelsDir, options.Lexicon);
@@ -71,7 +83,59 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
             config.MaxNumSentences = 1;
 
             reason = string.Empty;
-            return new SherpaVitsRealtimeTts(new OfflineTts(config), targetSampleRate, options.SpeakerId);
+            return new SherpaVitsRealtimeTts(new OfflineTts(config), targetSampleRate, options.SpeakerId,
+                "sherpa-vits");
+        }
+        catch (Exception ex)
+        {
+            reason = ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Kokoro 分支。跟 VITS 的差别：多要 **voices.bin**（音色表）与 **espeak-ng-data**（它靠 espeak 做音素化，
+    /// 所以 `DataDir` 这里**必须填** —— 正好跟 VITS 那条"别填 dataDir"的坑相反）。
+    /// </summary>
+    static SherpaVitsRealtimeTts? TryCreateKokoro(Config.TtsOptions.KokoroOptions options, string modelsDir,
+        int targetSampleRate, out string reason)
+    {
+        string model = Resolve(modelsDir, options.Model);
+        string voices = Resolve(modelsDir, options.Voices);
+        string tokens = Resolve(modelsDir, options.Tokens);
+        string dataDir = Resolve(modelsDir, options.DataDir);
+
+        if (!File.Exists(model) || !File.Exists(voices) || !File.Exists(tokens) || !Directory.Exists(dataDir))
+        {
+            reason = $"Kokoro 模型不全（需 model + voices.bin + tokens.txt + espeak-ng-data）：{modelsDir}";
+            return null;
+        }
+
+        try
+        {
+            var config = new OfflineTtsConfig();
+            config.Model.Kokoro.Model = model;
+            config.Model.Kokoro.Voices = voices;
+            config.Model.Kokoro.Tokens = tokens;
+            config.Model.Kokoro.DataDir = dataDir;
+
+            var dictDir = ResolveOptional(modelsDir, options.DictDir);
+            if (dictDir != null) config.Model.Kokoro.DictDir = dictDir;
+            var lexicon = ResolveLexicons(modelsDir, options.Lexicon);
+            if (lexicon != null) config.Model.Kokoro.Lexicon = lexicon;
+
+            var ruleFsts = ResolveRuleFsts(modelsDir, options.RuleFsts);
+            if (ruleFsts != null) config.RuleFsts = ruleFsts;
+
+            if (options.LengthScale > 0) config.Model.Kokoro.LengthScale = options.LengthScale;
+
+            config.Model.NumThreads = options.NumThreads;
+            config.Model.Provider = "cpu";
+            config.MaxNumSentences = 1;
+
+            reason = string.Empty;
+            return new SherpaVitsRealtimeTts(new OfflineTts(config), targetSampleRate, options.SpeakerId,
+                "sherpa-kokoro");
         }
         catch (Exception ex)
         {
@@ -152,6 +216,20 @@ public sealed class SherpaVitsRealtimeTts : IRealtimeTts, IDisposable
         return File.Exists(p) || Directory.Exists(p) ? p : null;
     }
 
+    /// <summary>词表列表（逗号分隔，如 Kokoro 的 <c>lexicon-us-en.txt,lexicon-zh.txt</c>）→ <c>a.txt,b.txt</c>；都不存在时返回 null。</summary>
+    private static string? ResolveLexicons(string modelsDir, string? relative)
+    {
+        if (string.IsNullOrWhiteSpace(relative)) return null;
+        var parts = relative!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var resolved = new List<string>();
+        foreach (var part in parts)
+        {
+            var p = ResolveOptional(modelsDir, part);
+            if (p != null) resolved.Add(p);
+        }
+        return resolved.Count > 0 ? string.Join(",", resolved) : null;
+    }
+
     /// <summary>规则 FST 列表（逗号分隔）→ sherpa-onnx 要求的 <c>a.fst,b.fst</c> 形式；全都不存在时返回 null。</summary>
     private static string? ResolveRuleFsts(string modelsDir, string? relative)
     {
@@ -186,10 +264,10 @@ public static class RealtimeTtsFactory
         }
 
         var modelsDir = config.ResolvePath(config.ModelsDir);
-        var engine = SherpaVitsRealtimeTts.TryCreate(config.Tts.Vits, modelsDir, config.Tts.SampleRate, out var vitsReason);
+        var engine = SherpaVitsRealtimeTts.TryCreate(config.Tts, modelsDir, config.Tts.SampleRate, out var vitsReason);
         if (engine != null)
         {
-            detail = $"sherpa-vits（实时合成已就绪，输出 {engine.SampleRate}Hz）";
+            detail = $"{engine.Name}（实时合成已就绪，输出 {engine.SampleRate}Hz）";
             return engine;
         }
 

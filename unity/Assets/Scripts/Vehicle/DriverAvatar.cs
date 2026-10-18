@@ -57,6 +57,9 @@ namespace Copilot.Vehicle
         [Header("预览 / 调试")]
         [Tooltip("强制当成「正在说话」，供编辑器预览图检查嘴型（编辑模式没有音频）")]
         public bool forceTalking;
+        [Tooltip("用的是**真模型**（无骨骼）：此时 head 指的是「整体转身轴」，手臂/嘴没有骨架可驱动 —— " +
+                 "关卡校验与预览摆姿按这个开关换一套判据")]
+        public bool realModel;
 
         float _headYaw;
         float _handAngle;
@@ -76,8 +79,10 @@ namespace Copilot.Vehicle
             if (leftArm != null) leftArm.localRotation = Quaternion.Euler(0f, 0f, _handAngle);
             if (rightArm != null) rightArm.localRotation = Quaternion.Euler(0f, 0f, _handAngle);
 
-            // ② 说话 → 扭头看教练（不说话回正）
-            _headYaw = Smooth(_headYaw, talking ? headTurnAngle : 0f, headTurnSpeed, dt);
+            // ② 说话 → 扭头看教练。**说完就停在那**（`_headYaw` 只在说话时被推动），
+            //    不再自动回正 —— 之前每轮说完都逼着把头掰回来，看着像"机械复位"。
+            //    真要回正时由外部显式调 `LookForward()`（例如关卡重置）。
+            if (talking) _headYaw = Smooth(_headYaw, headTurnAngle, headTurnSpeed, dt);
 
             // ② 点头：说话时按 mouthHz 摆动，停下就平滑回中（不硬切）
             _nod = talking

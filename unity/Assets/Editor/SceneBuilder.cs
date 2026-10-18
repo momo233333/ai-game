@@ -64,6 +64,53 @@ namespace Copilot.EditorTools
         const string RigName = "CopilotRig";
         const string CarName = "Car";
 
+        /// <summary>
+        /// 用户给的模型（**本地文件，不进仓库** —— 117MB 一个，超 GitHub 单文件 100MB 上限；
+        /// 要用的机器把 `F:\妹妹.fbx` / `F:\内饰.fbx` 分别放到这两个路径即可，缺文件会自动退回基本体）。
+        /// 目录层级是**必须的**：FBX 内部按相对路径 `output.fbm/xxx.png` 找贴图，
+        /// 放在同名子目录下、贴图抽到旁边的 `output.fbm`，Unity 才挂得上（否则是一身白模）。
+        ///
+        /// 拍图确认过两个模型的真面目（`logs/model_{sister,interior}_*.png`）：
+        /// - `妹妹` = **女孩 + 驾驶座 + 方向盘 + 一小截仪表台**（面向 **+X**，要转 −90° 才朝车头）
+        /// - `内饰` = **整个前舱**（仪表台+中控+挡杆+双座+方向盘+后视镜+侧镜+A柱；车头朝 **−Z**，要转 180°）
+        /// 两者**都自带驾驶位座椅与方向盘**，所以在驾驶位上是重叠的 —— 靠"把妹妹整体缩小，
+        /// 让她的座椅/方向盘缩进内饰的座椅/方向盘里藏住"来合体。
+        /// 两者**都没有骨骼**（`LimbNode 0 / SkinnedMeshRenderer 0`），转向/张嘴的骨骼动画做不了。
+        /// </summary>
+        const string SisterModelAsset = "Assets/Models/AI/sister/sister.fbx";
+        const string InteriorModelAsset = "Assets/Models/AI/interior/interior.fbx";
+
+        // ---- 车舱尺寸：用真模型之后按真实比例抬高 ----------------------------
+        // 原来地板 0.885 / 车顶 1.52 → 净高只有 0.63m，装不下按合理比例缩放的内饰（要 ~1.05m）。
+        const float CabinFloorY = 0.885f;
+        const float CabinRoofY = 1.95f;
+
+        // ---- 真模型摆放（数字都按导入体检的实测尺寸算：内饰 1.12×0.77×0.57，妹妹 0.83×0.86×0.69）----
+        /// <summary>内饰缩放：模型舱宽 1.12 → 车舱内宽 ≈1.52（车身 1.74 内收一点），模型高 0.77 → 1.05。</summary>
+        const float InteriorModelScale = 1.36f;
+        /// <summary>内饰**底心**落点（车体局部）：底坐在车内地板上，仪表台前沿贴前挡上沿（z≈1.0）。</summary>
+        static readonly Vector3 InteriorModelAnchor = new Vector3(0f, CabinFloorY, 0.62f);
+        /// <summary>内饰朝向：模型车头是 −Z，转 180° 对上我们的 +Z。</summary>
+        static readonly Vector3 InteriorModelEuler = new Vector3(0f, 180f, 0f);
+
+        /// <summary>
+        /// 妹妹缩放：整体收到 0.85 → 0.73m 高（车舱净高 1.065）。
+        /// **故意比内饰小一号**：她的座椅/方向盘才藏得进内饰那套里（等于"小雅是个小个子"）。
+        /// </summary>
+        const float SisterModelScale = 0.85f;
+        /// <summary>妹妹朝向：模型面向 +X，转 −90° 对上我们的 +Z。</summary>
+        static readonly Vector3 SisterModelEuler = new Vector3(0f, -90f, 0f);
+        /// <summary>妹妹**底心**落点（车体局部）：和内饰同一个"车内地板"基准，驾驶位一侧。</summary>
+        static readonly Vector3 SisterModelAnchor = new Vector3(-0.42f, CabinFloorY, 0.28f);
+
+        // ---- 方向盘（三个数字都按"真车盘 ≈ 0.38m、中心在座垫上方 0.5m、前倾 20°"给）----
+        /// <summary>方向盘中心（车体局部）。真内饰在用时，这一层只是"盖在模型那个不能动的盘上"的示意层。</summary>
+        static readonly Vector3 WheelAnchor = new Vector3(-0.42f, CabinFloorY + 0.50f, 0.78f);
+        /// <summary>盘径：0.40 接近真车（0.38）。做太大在真内饰里会盖住中控。</summary>
+        const float WheelDiameter = 0.40f;
+        /// <summary>前倾角：真车盘面不是竖直的，大约 20~25°。挂在子物体上（根的 rotation 归 SteeringWheel 用）。</summary>
+        const float WheelTiltPitch = -22f;
+
         /// <summary>固定随机种子：每次生成的楼群/道具布局完全一致，便于对比与回归。</summary>
         const int Seed = 20261011;
 
@@ -625,65 +672,144 @@ namespace Copilot.EditorTools
         /// </summary>
         static void CreateInterior(Transform car, VehicleController controller)
         {
-            // 顶棚 / 后隔板 / 两侧门板 / A 柱 / 前挡上沿 —— 拼出「有壳但不挡视线」的座舱
-            Box("Roof", car, new Vector3(0f, 1.52f, -0.15f), new Vector3(1.68f, 0.07f, 2.1f), _cabinTrim, withCollider: false);
-            Box("RearBulkhead", car, new Vector3(0f, 1.12f, -1.42f), new Vector3(1.66f, 0.8f, 0.08f), _cabinTrim, withCollider: false);
+            EnsureModelTextures(InteriorModelAsset);
+            var interiorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(InteriorModelAsset);
+
+            // 顶棚 / 后隔板 / 两侧门板 / A 柱 / 前挡上沿 —— **车壳永远由代码拼**：
+            // 真内饰里没有车顶，而且这几个件的高度必须跟着 CabinRoofY 走。
+            Box("Roof", car, new Vector3(0f, CabinRoofY, -0.15f), new Vector3(1.68f, 0.07f, 2.1f), _cabinTrim, withCollider: false);
+            Box("RearBulkhead", car, new Vector3(0f, (CabinFloorY + CabinRoofY) * 0.5f, -1.42f),
+                new Vector3(1.66f, CabinRoofY - CabinFloorY, 0.08f), _cabinTrim, withCollider: false);
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                Box("DoorPanel", car, new Vector3(sx * 0.86f, 0.86f, -0.2f), new Vector3(0.06f, 0.62f, 2.0f), _cabinTrim, withCollider: false);
-                Box("APillar", car, new Vector3(sx * 0.74f, 1.3f, 0.92f), new Vector3(0.1f, 0.56f, 0.1f), _cabinTrim, withCollider: false);
+                Box("DoorPanel", car, new Vector3(sx * 0.86f, (CabinFloorY + CabinRoofY) * 0.5f, -0.2f),
+                    new Vector3(0.06f, CabinRoofY - CabinFloorY, 2.0f), _cabinTrim, withCollider: false);
+                Box("APillar", car, new Vector3(sx * 0.74f, CabinRoofY - 0.3f, 0.92f),
+                    new Vector3(0.1f, 0.6f, 0.1f), _cabinTrim, withCollider: false);
             }
-            Box("Header", car, new Vector3(0f, 1.5f, 1.0f), new Vector3(1.62f, 0.1f, 0.1f), _cabinTrim, withCollider: false);
+            Box("Header", car, new Vector3(0f, CabinRoofY - 0.02f, 1.0f), new Vector3(1.62f, 0.1f, 0.1f), _cabinTrim, withCollider: false);
 
             // 车内地板：车身的顶面（红色）同时也是引擎盖，不加这块的话座位前方会是一片红
-            Box("Floor", car, new Vector3(0f, 0.885f, -0.25f), new Vector3(1.66f, 0.02f, 2.1f), _dash, withCollider: false);
+            Box("Floor", car, new Vector3(0f, CabinFloorY, -0.25f), new Vector3(1.66f, 0.02f, 2.1f), _dash, withCollider: false);
 
-            // 仪表台 + 中控 + 转向柱
-            // 仪表台顶面 0.98，比视线（相机 y=1.26）低 0.28 —— 刚好挡住近处的引擎盖，
-            // 只留远处一小条；再低就露出红色顶面，再高就变成一堵墙（两个极端都试过了）。
-            Box("Dash", car, new Vector3(0f, 0.86f, 0.95f), new Vector3(1.64f, 0.24f, 0.7f), _dash, withCollider: false);
-            Box("Console", car, new Vector3(0f, 0.7f, 0.05f), new Vector3(0.34f, 0.34f, 1.4f), _console, withCollider: false);
-            Box("SteeringColumn", car, new Vector3(-0.42f, 0.86f, 0.66f), new Vector3(0.09f, 0.09f, 0.34f), _console, withCollider: false);
-
-            // 后视镜
-            Box("MirrorStalk", car, new Vector3(0f, 1.42f, 0.86f), new Vector3(0.04f, 0.12f, 0.04f), _console, withCollider: false);
-            Box("RearViewMirror", car, new Vector3(0f, 1.36f, 0.86f), new Vector3(0.34f, 0.1f, 0.04f), _mirror, withCollider: false);
-
-            // 座椅（驾驶位 + 副驾）
-            for (int sx = -1; sx <= 1; sx += 2)
+            if (interiorPrefab != null)
             {
-                float x = sx * 0.42f;
-                Box("SeatBack", car, new Vector3(x, 1.02f, -0.62f), new Vector3(0.62f, 0.98f, 0.16f), _seat, withCollider: false);
-                Box("SeatCushion", car, new Vector3(x, 0.72f, -0.22f), new Vector3(0.62f, 0.14f, 0.7f), _seat, withCollider: false);
+                // 真内饰：一整套前舱（仪表台 + 中控 + 挡杆 + 双座 + 方向盘 + 后视镜 + 侧镜 + A 柱）
+                PlaceModel(interiorPrefab, "InteriorModel", car, InteriorModelScale,
+                    InteriorModelAnchor, InteriorModelEuler);
+            }
+            else
+            {
+                // 降级：模型不在 → 保留原来的灰盒仪表台/座椅/后视镜，保证没有那 117MB 资产的机器也能玩
+                Box("Dash", car, new Vector3(0f, CabinFloorY + 0.26f, 0.95f), new Vector3(1.64f, 0.24f, 0.7f), _dash, withCollider: false);
+                Box("Console", car, new Vector3(0f, CabinFloorY + 0.04f, 0.05f), new Vector3(0.34f, 0.34f, 1.4f), _console, withCollider: false);
+                Box("SteeringColumn", car, new Vector3(-0.42f, CabinFloorY + 0.26f, 0.66f), new Vector3(0.09f, 0.09f, 0.34f), _console, withCollider: false);
+                Box("MirrorStalk", car, new Vector3(0f, CabinRoofY - 0.14f, 0.86f), new Vector3(0.04f, 0.12f, 0.04f), _console, withCollider: false);
+                Box("RearViewMirror", car, new Vector3(0f, CabinRoofY - 0.2f, 0.86f), new Vector3(0.34f, 0.1f, 0.04f), _mirror, withCollider: false);
+                for (int sx = -1; sx <= 1; sx += 2)
+                {
+                    float x = sx * 0.42f;
+                    Box("SeatBack", car, new Vector3(x, CabinFloorY + 0.62f, -0.62f), new Vector3(0.62f, 0.62f, 0.16f), _seat, withCollider: false);
+                    Box("SeatCushion", car, new Vector3(x, CabinFloorY + 0.30f, -0.22f), new Vector3(0.62f, 0.14f, 0.7f), _seat, withCollider: false);
+                }
             }
 
-            // 方向盘（脚本驱动转动）+ 盘辐让转动看得出来
+            CreateSteeringWheel(car, controller, withDisc: interiorPrefab == null);
+            CreateDriverAvatar(car, car.GetComponentInChildren<SteeringWheel>(true));
+        }
+
+        /// <summary>
+        /// 方向盘（脚本驱动转动）。**真内饰在用的时候只做「轮缘 + 辐条」的示意，不做盘面** ——
+        /// 模型自带的方向盘是一整块网格、驱不动，我们这层盖在上面：
+        /// 有辐条在转，玩家就看得出打了多少方向；去掉盘面，她搭在盘上的手才不会被挡住。
+        ///
+        /// 盘面无遮拦时（降级路径）仍保留原来的实心盘 —— 只有辐条会像悬空的一个十字。
+        /// </summary>
+        static void CreateSteeringWheel(Transform car, VehicleController controller, bool withDisc)
+        {
             var wheelRoot = new GameObject("SteeringWheel");
             wheelRoot.transform.SetParent(car, false);
-            // ⚠️ 高度 1.00 而不是 0.92：学员躯干顶在 y≈1.07，方向盘放 0.92 时**整盘正好藏在她身后**，
-            // 副驾视角只能看到上沿一条边。抬高 + 加大之后上半个盘能露在肩线以上，玩家才看得见她打了多少方向。
-            wheelRoot.transform.localPosition = new Vector3(-0.42f, 1.00f, 0.48f);
+            wheelRoot.transform.localPosition = WheelAnchor;
 
-            // 盘体用 **cabinTrim（中灰）** 而不是 console（近黑）：前者能在暗车厢里显形 ——
-            // 原来整个盘是 0.11 的近黑，跟仪表台糊成一片，等于"没有方向盘"。
-            // 辐条用 chrome（亮银）：**转动靠辐条才看得出来**，不然盘转了你只看到一个纯色圆片。
-            Cylinder("Disc", wheelRoot.transform, Vector3.zero, new Vector3(0.42f, 0.04f, 0.42f), _cabinTrim,
+            // 倾角放在子物体上：SteeringWheel 每帧会把根的 localRotation 写成 (0,0,Angle)，
+            // 倾角挂在根上会被它抹掉。
+            var tilt = new GameObject("WheelTilt").transform;
+            tilt.SetParent(wheelRoot.transform, false);
+            tilt.localRotation = Quaternion.Euler(WheelTiltPitch, 0f, 0f);
+
+            if (withDisc)
+            {
+                // 盘体用 cabinTrim（中灰）：近黑色在暗车厢里跟仪表台糊成一片，等于"没有方向盘"
+                Cylinder("Disc", tilt, Vector3.zero, new Vector3(WheelDiameter, 0.04f, WheelDiameter), _cabinTrim,
+                    Quaternion.Euler(90f, 0f, 0f), withCollider: false);
+            }
+
+            // 辐条用 chrome（亮银）：**转动靠辐条才看得出来**，不然盘转了你只看到同一块东西
+            float spoke = WheelDiameter * 0.86f;
+            Box("SpokeH", tilt, new Vector3(0f, 0f, 0.02f), new Vector3(spoke, 0.04f, 0.03f), _chrome, withCollider: false);
+            Box("SpokeV", tilt, new Vector3(0f, 0f, 0.02f), new Vector3(0.04f, spoke, 0.03f), _chrome, withCollider: false);
+            Cylinder("WheelHub", tilt, new Vector3(0f, 0f, 0.03f), new Vector3(0.12f, 0.05f, 0.12f), _chrome,
                 Quaternion.Euler(90f, 0f, 0f), withCollider: false);
-            Box("SpokeH", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.40f, 0.045f, 0.035f), _chrome, withCollider: false);
-            Box("SpokeV", wheelRoot.transform, new Vector3(0f, 0f, 0.02f), new Vector3(0.045f, 0.40f, 0.035f), _chrome, withCollider: false);
 
             var wheel = wheelRoot.AddComponent<SteeringWheel>();
             wheel.vehicle = controller;
-
-            CreateDriverAvatar(car, wheel);
         }
 
-        /// <summary>驾驶位上的学员小雅（基本体拼的人形）。说话时会扭头看教练，由 <see cref="CreateRig"/> 接上 ttsPlayer。</summary>
+        /// <summary>
+        /// 驾驶位上的学员小雅：**优先用真模型**，模型文件不在就退回基本体拼的人形
+        /// （这样没有那 117MB 资产的机器/CI 上，场景生成照样跑得通 —— 模型已 gitignore）。
+        ///
+        /// 真模型 = `Assets/Models/AI/sister/sister.fbx`。导入体检结论：
+        /// **单 mesh · 150 万三角面 · 没有骨骼 · 没有 BlendShape**（`SkinnedMeshRenderer 0 / LimbNode 0 / MorphTarget 0`）。
+        /// 所以：
+        /// - 说话扭头 → 只能**整体绕 Y 拧**（坐在座位上转上身），做不到"只转头"；
+        /// - 张嘴 / 手臂跟盘 → 没有骨架也没有表情目标可驱动，那两处引用留空（`DriverAvatar` 对 null 有兜底）。
+        /// </summary>
         static void CreateDriverAvatar(Transform car, SteeringWheel wheel)
         {
             var avatar = new GameObject("DriverAvatar");
             avatar.transform.SetParent(car, false);
             avatar.transform.localPosition = new Vector3(-0.42f, 0.68f, -0.2f);
+
+            var driver = avatar.AddComponent<DriverAvatar>();
+            driver.wheel = wheel;
+
+            if (TryPlaceDriverModel(avatar.transform, driver)) return;
+
+            BuildPrimitiveAvatar(avatar, driver);
+        }
+
+        /// <summary>真模型分支：成功返回 true（此时 <c>driver.head</c> 指向**整体转身轴**，不是"头"）。</summary>
+        static bool TryPlaceDriverModel(Transform avatar, DriverAvatar driver)
+        {
+            EnsureModelTextures(SisterModelAsset);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(SisterModelAsset);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[SceneBuilder] 没有 {SisterModelAsset} —— 退回基本体学员。" +
+                                 "想用真模型：把 F:\\妹妹.fbx 放到 unity/Assets/Models/AI/sister/sister.fbx（见 开发进度 §9）");
+                return false;
+            }
+
+            // 整体转身轴 = 她的**底心**（模型原点在臀底/座椅底，转起来是"坐在座位上拧上身"）
+            var pivot = new GameObject("SisterPivot").transform;
+            pivot.SetParent(avatar, false);
+            pivot.localPosition = Vector3.zero;
+
+            avatar.localPosition = SisterModelAnchor;
+            PlaceModel(prefab, "SisterModel", pivot, SisterModelScale, Vector3.zero, SisterModelEuler);
+
+            driver.head = pivot;
+            driver.realModel = true;
+            // 30° 的"脖子拧"幅度用在"整体转身"上看着像闪腰 —— 收到 26°，够表达「侧过头来看你」
+            driver.headTurnAngle = 26f;
+            return true;
+        }
+
+        /// <summary>降级分支：基本体拼的人形（没有真模型的机器走这条）。</summary>
+        static void BuildPrimitiveAvatar(GameObject avatar, DriverAvatar driver)
+        {
+            avatar.transform.localPosition = new Vector3(-0.42f, CabinFloorY + 0.32f, -0.2f);
 
             const float torsoY = 0.24f;
 
@@ -736,8 +862,6 @@ namespace Copilot.EditorTools
             var leftArm = BuildArm(avatar.transform, -0.13f);
             var rightArm = BuildArm(avatar.transform, 0.13f);
 
-            var driver = avatar.AddComponent<DriverAvatar>();
-            driver.wheel = wheel;
             driver.head = head;
             driver.leftArm = leftArm;
             driver.rightArm = rightArm;
@@ -955,7 +1079,9 @@ namespace Copilot.EditorTools
             go.tag = "MainCamera";
             go.transform.SetParent(car, false);
             // 相机再往右后挪一点、并朝驾驶位偏 12°，这样正前方就能同时看到路和学员的侧脸
-            go.transform.localPosition = new Vector3(0.52f, 1.26f, -0.42f);   // 副驾座（左舵车：驾驶位在 x<0）
+            // 高度跟着车舱抬高（原来 1.26 是给 1.52 的低车顶配的坐姿）——
+            // 现在地板 0.885 / 车顶 1.95，坐姿眼高 ≈ 地板 + 0.85。
+            go.transform.localPosition = new Vector3(0.52f, CabinFloorY + 0.84f, 0.30f);   // 副驾座（左舵车：驾驶位在 x<0）
             go.transform.localRotation = Quaternion.identity;
 
             var cam = go.AddComponent<Camera>();
@@ -1446,25 +1572,41 @@ namespace Copilot.EditorTools
             {
                 Requires(driver.wheel != null, "DriverAvatar.wheel 未连（手不会跟方向盘转）", problems);
                 Requires(driver.head != null, "DriverAvatar.head 未连（不会扭头看教练）", problems);
-                Requires(driver.leftArm != null && driver.rightArm != null, "DriverAvatar 手臂未连", problems);
-                Requires(driver.mouth != null, "DriverAvatar.mouth 未连（说话时不会张嘴）", problems);
                 Requires(driver.gameState != null, "DriverAvatar.gameState 未连（紧张时不会微动）", problems);
                 Requires(driver.ttsPlayer != null, "DriverAvatar.ttsPlayer 未连（不知道什么时候在说话）", problems);
+
+                if (driver.realModel)
+                {
+                    // 真模型分支：整块网格没有骨骼，手臂/嘴本来就没得接（断言它们反而是错的）
+                    Requires(CountInScene(scene, "SisterModel") >= 1, "没找到真模型学员 SisterModel", problems);
+                }
+                else
+                {
+                    Requires(driver.leftArm != null && driver.rightArm != null, "DriverAvatar 手臂未连", problems);
+                    Requires(driver.mouth != null, "DriverAvatar.mouth 未连（说话时不会张嘴）", problems);
+                }
             }
 
-            // ---- 学员的五官/身体（P 轮的"高细节"必须真的生成了，别退回一堆方块）----
-            Requires(CountInScene(scene, "Head") >= 1, "学员没有头", problems);
-            Requires(CountInScene(scene, "Face") >= 1, "学员没有脸（球体颅骨）", problems);
-            Requires(CountInScene(scene, "Hair") >= 1, "学员没有头发", problems);
-            Requires(CountInScene(scene, "EyeWhite") >= 2, "学员没有眼睛", problems);
-            Requires(CountInScene(scene, "Pupil") >= 2, "学员没有瞳孔", problems);
-            Requires(CountInScene(scene, "Mouth") >= 1, "学员没有嘴", problems);
-            Requires(CountInScene(scene, "Neck") >= 1, "学员没有脖子", problems);
-            Requires(CountInScene(scene, "Torso") >= 1, "学员没有躯干", problems);
-            Requires(CountInScene(scene, "Elbow") >= 2 && CountInScene(scene, "Forearm") >= 2,
-                "学员的手臂没有肘/前臂（不是人形）", problems);
-            Requires(CountInScene(scene, "Hand") >= 2, "学员没有手", problems);
-            Requires(CountInScene(scene, "Brow") >= 2, "学员没有眉毛", problems);
+            // ---- 座舱：真内饰或灰盒降级件，至少得有一套 ----
+            Requires(CountInScene(scene, "InteriorModel") >= 1 || CountInScene(scene, "Dash") >= 1,
+                "座舱里既没有真内饰（InteriorModel）也没有灰盒仪表台（Dash）", problems);
+
+            if (driver == null || !driver.realModel)
+            {
+                // ---- 学员的五官/身体（P 轮的"高细节"必须真的生成了，别退回一堆方块）----
+                Requires(CountInScene(scene, "Head") >= 1, "学员没有头", problems);
+                Requires(CountInScene(scene, "Face") >= 1, "学员没有脸（球体颅骨）", problems);
+                Requires(CountInScene(scene, "Hair") >= 1, "学员没有头发", problems);
+                Requires(CountInScene(scene, "EyeWhite") >= 2, "学员没有眼睛", problems);
+                Requires(CountInScene(scene, "Pupil") >= 2, "学员没有瞳孔", problems);
+                Requires(CountInScene(scene, "Mouth") >= 1, "学员没有嘴", problems);
+                Requires(CountInScene(scene, "Neck") >= 1, "学员没有脖子", problems);
+                Requires(CountInScene(scene, "Torso") >= 1, "学员没有躯干", problems);
+                Requires(CountInScene(scene, "Elbow") >= 2 && CountInScene(scene, "Forearm") >= 2,
+                    "学员的手臂没有肘/前臂（不是人形）", problems);
+                Requires(CountInScene(scene, "Hand") >= 2, "学员没有手", problems);
+                Requires(CountInScene(scene, "Brow") >= 2, "学员没有眉毛", problems);
+            }
 
             // ---- 车身高细节件 ----
             Requires(CountInScene(scene, "Nose") >= 1, "车身没有车头前悬", problems);
@@ -1516,7 +1658,8 @@ namespace Copilot.EditorTools
             var tutorial = FindInScene<TutorialDirector>(scene);
             Requires(tutorial != null, "场景里没有教学关导演 TutorialDirector", problems);
             Requires(tutorial != null && tutorial.stepLabel != null, "TutorialDirector.stepLabel 未连", problems);
-            Requires(CountInScene(scene, "Dash") >= 1, "没有仪表台，车内是空的", problems);
+            Requires(CountInScene(scene, "InteriorModel") >= 1 || CountInScene(scene, "Dash") >= 1,
+                "没有仪表台（真内饰或灰盒件都没有），车内是空的", problems);
 
             // ---- 玩法层（主动犯错 + 结算）----
             var road = FindInScene<RoadGeometry>(scene);
@@ -1786,6 +1929,94 @@ namespace Copilot.EditorTools
             var repo = unityProject == null ? null : Directory.GetParent(unityProject)?.FullName;
             if (repo == null) throw new InvalidOperationException("无法定位仓库根目录");
             return Path.Combine(repo, relative);
+        }
+
+        // ---- 真模型摆放 ---------------------------------------------
+
+        /// <summary>
+        /// 贴图兜底：FBX 内部按**相对路径** `output.fbm/xxx.png` 找贴图，而用户只给了 .fbx ——
+        /// 贴图是**内嵌**在 fbx 里的，要 `ModelImporter.ExtractTextures()` 抽出来放到同名子目录旁边才挂得上
+        /// （不抽 = 一身白模）。幂等：目标目录已有 png 就直接返回。
+        ///
+        /// 为什么放在建场景时做、而不是只留在 `ModelProbe` 里：新机器上的流程是"拷 fbx → 生成场景"，
+        /// 少跑一步 ModelProbe 就会得到两个白模 —— 与其写进文档让人记住，不如让生成器自己兜住。
+        /// ⚠️ 必须在 `LoadAssetAtPath` **之前**调用：抽贴图会触发模型重导，先加载的那个引用会失效。
+        /// </summary>
+        static void EnsureModelTextures(string assetPath)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(assetPath) ?? ".");
+
+            var importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+            if (importer == null) return;
+
+            var fbm = Path.ChangeExtension(assetPath, null) + "/output.fbm";
+            if (Directory.Exists(fbm) && Directory.GetFiles(fbm, "*.png").Length > 0) return;
+
+            try
+            {
+                importer.ExtractTextures(fbm);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[SceneBuilder] 抽贴图失败（{assetPath}）：{ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 把真模型实例化到 <paramref name="parent"/> 下：
+        /// 按 <paramref name="scale"/> 缩放、按 <paramref name="euler"/> 转正，
+        /// 再把**实测包围盒的底心**（左右中心 + 底面）落到 <paramref name="bottomCenter"/>（父物体局部坐标）。
+        ///
+        /// 缩放施加在一层 holder 上、**不是模型自己** —— AI 导出的 FBX 自带一层未知的节点缩放
+        /// （体检：mesh 自身 0.01，实际渲染出来 0.86，中间夹着 ~86 倍的节点缩放），
+        /// 直接写 `localScale` 会把这层覆盖掉，模型瞬间只剩 8 毫米。
+        ///
+        /// 摆放顺序不能反：**先定缩放 → 量包围盒 → 再定旋转与位移**。
+        /// 量的时候 holder 旋转还是 identity，量出来才是"未转正"的盒；反过来的话，
+        /// 旋转会把刚算好的位移带着一起转，模型落到别处去。
+        /// </summary>
+        public static GameObject PlaceModel(GameObject prefab, string name, Transform parent, float scale,
+            Vector3 bottomCenter = default, Vector3 euler = default)
+        {
+            float k = scale <= 0f ? 1f : scale;
+
+            var holder = new GameObject(name);
+            holder.transform.SetParent(parent, false);
+            holder.transform.localScale = Vector3.one * k;
+
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder.transform);
+            model.name = name + "Src";
+
+            var b = BoundsInSpace(holder.transform, model);
+
+            holder.transform.localRotation = Quaternion.Euler(euler);
+            holder.transform.localPosition = bottomCenter
+                - holder.transform.localRotation * new Vector3(b.center.x * k, b.min.y * k, b.center.z * k);
+            return holder;
+        }
+
+        /// <summary>
+        /// 一组 Renderer 在 <paramref name="space"/> 局部坐标系里的合并包围盒。
+        /// 必须换算到 space，不能直接读 <c>Renderer.bounds</c>：后者是世界坐标，会把父物体的位移也算进来。
+        /// </summary>
+        public static Bounds BoundsInSpace(Transform space, GameObject root)
+        {
+            bool has = false;
+            var result = new Bounds();
+            var toSpace = space.worldToLocalMatrix;
+
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var local = r.localBounds;
+                var m = toSpace * r.transform.localToWorldMatrix;
+                var c = m.MultiplyPoint3x4(local.center);
+                var e = m.MultiplyVector(local.extents);
+                var b = new Bounds(c, new Vector3(Mathf.Abs(e.x), Mathf.Abs(e.y), Mathf.Abs(e.z)) * 2f);
+
+                if (has) result.Encapsulate(b); else { result = b; has = true; }
+            }
+
+            return result;
         }
 
         // ---- 通用 ---------------------------------------------------

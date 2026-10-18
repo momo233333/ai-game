@@ -99,7 +99,35 @@ public sealed class Config
         public string VoicelibManifest { get; set; } = "voice-corpus/manifest.json";
         public int SampleRate { get; set; } = 24000;
         public VitsOptions Vits { get; set; } = new();
+        /// <summary>
+        /// **Kokoro 中文**（`kokoro-int8-multi-lang-v1_1`）。配了 <see cref="KokoroOptions.Model"/> 就用它，
+        /// 否则回落到 <see cref="Vits"/>。为什么加它：本地 VITS 中文（melo / eula / theresa）是社区模型，
+        /// 音质天花板就在那儿 —— 用户反馈"听着有口音"。Kokoro 是同类里最自然的一档，
+        /// 而且中文女声是**按名字分的**（小贝/小妮/小晓/小伊），正好挑甜美款。
+        /// </summary>
+        public KokoroOptions Kokoro { get; set; } = new();
         public SapiOptions Sapi { get; set; } = new();
+
+        /// <summary>
+        /// Kokoro 参数。注意它比 VITS **多吃两样**：`voices.bin`（音色表）与 `dataDir`（espeak-ng-data，
+        /// 它用 espeak 做音素化，所以这里 `DataDir` 是**必须**的，跟 VITS 那条"别填 dataDir"的坑正好相反）。
+        /// </summary>
+        public sealed class KokoroOptions
+        {
+            /// <summary>留空 = 不用 Kokoro（回落 VITS）。</summary>
+            public string Model { get; set; } = string.Empty;
+            public string Voices { get; set; } = "kokoro-int8-multi-lang-v1_1/voices.bin";
+            public string Tokens { get; set; } = "kokoro-int8-multi-lang-v1_1/tokens.txt";
+            public string DataDir { get; set; } = "kokoro-int8-multi-lang-v1_1/espeak-ng-data";
+            public string? DictDir { get; set; } = "kokoro-int8-multi-lang-v1_1/dict";
+            public string? Lexicon { get; set; } = "kokoro-int8-multi-lang-v1_1/lexicon-us-en.txt,kokoro-int8-multi-lang-v1_1/lexicon-zh.txt";
+            public string? RuleFsts { get; set; } =
+                "kokoro-int8-multi-lang-v1_1/date-zh.fst,kokoro-int8-multi-lang-v1_1/number-zh.fst,kokoro-int8-multi-lang-v1_1/phone-zh.fst";
+            /// <summary>音色 id（`voices.bin` 的下标）。中文女声在低段：0~3 通常是 小贝/小妮/小晓/小伊。</summary>
+            public int SpeakerId { get; set; }
+            public float LengthScale { get; set; } = 1.1f;
+            public int NumThreads { get; set; } = 2;
+        }
 
         public sealed class VitsOptions
         {

@@ -10,6 +10,10 @@ ai-service/models/
 # 模型权重（C# 栈统一目录，见 IT方案1.md V2.0 §2.4）
 models/
 
+# 用户下载的高模 FBX（妹妹 117MB / 内饰 117MB —— 超 GitHub 单文件 100MB 上限，只能本地放着；
+# 场景生成器找不到它们会自动退回灰盒学员/仪表台，见 unity/Assets/Editor/SceneBuilder.cs）
+unity/Assets/Models/AI/
+
 # .NET 构建产物（Copilot.Core / Contracts / AIService / Client / Tests）
 [Bb]in/
 [Oo]bj/

@@ -23,6 +23,13 @@ Unity 负责渲染/物理/UI，AI 以**独立 .NET 8 伴生进程**运行（ASR 
 >
 > **她的声音**：`vits-zh-hf-eula`（中文女声，本地离线推理）—— 自由句实时合成与语音库 77 条**同一个引擎录的**，
 > 所以整场一个嗓门。想再换音色：改 `tts.vits.*` 指向别的 sherpa-onnx VITS 模型，再跑 `--synth-voicelib` 重录（见 `开发进度.md` §9）。
+> 本地中文音色候选（都在 `logs/voice_candidates/`，可试听）：`fanchen-C` / `zh-ll` / **`kokoro`（新增支持，见 `tts.kokoro` 配置段，
+> 中文女声 id 0~3 通常是 小贝/小妮/小晓/小伊）**。
+> ⚠️ **别用文件 hash 判断"是不是换了个说话人"** —— VITS 合成带随机噪声，同一配置跑两次就不一样（见 `开发进度.md` §10 AG）。
+>
+> **她的座位**：训练场里驾驶位与整个前舱用的是**真人模型**（你给的 `妹妹.fbx` / `内饰.fbx`，见 §「准备模型」）——
+> 仪表台、中控、双座、后视镜、侧镜都是真的，她坐在真座椅上、手搭在真方向盘上。因为模型是**没有骨骼的静态网格**：
+> 说话"扭头"= **整体转身**（说完停在那儿不回正），张嘴/手臂跟盘的骨骼动画做不了（见 `开发进度.md` §7-38）。
 >
 > **她的表现**：说话时**张嘴 + 点头**，手臂跟着方向盘**指数平滑**转（不再瞬移），情绪紧张（NERVOUS）时头部轻微发颤。
 > Blend Tree / IK / 面部表情留给换真人物模型之后（`DriverAvatar`）。
@@ -124,10 +131,10 @@ cd e:\AI_Workplace\AI_Game\ai-game
 
 # 0) 首次：下模型权重（约 4.8 GB）+ 造指令语音样本
 powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1              # 全部（LLM/ASR/VAD/TTS）
-powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only tts    # 只下 TTS（MeloTTS，162 MB）
+powershell -ExecutionPolicy Bypass -File tools\fetch_models.ps1 -Only tts    # 只下 TTS（默认中文女声 eula，116 MB）
 powershell -ExecutionPolicy Bypass -File tools\make_command_samples.ps1
 
-# 1) 编译（0 警告 0 错误）+ 测试（210 项）
+# 1) 编译（0 警告 0 错误）+ 测试（243 项）
 dotnet build Copilot.sln
 dotnet test Copilot.sln
 
@@ -202,6 +209,23 @@ powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.E
 > `闲聊`/`致谢`/`模糊`/`抱怨`（**不得误判 IGNORE、不得扣信任**）。期望意图填 `-` 表示不校验。
 
 > **没有模型也能跑**：`models/` 为空时 LLM 自动降级到规则引擎、ASR 不可用，`--text` / `--play` 与全部测试照常可用。
+
+> **真模型（学员 / 内饰）是可选的**：两个 FBX 各 117MB，**超 GitHub 单文件 100MB 上限，所以不进仓库**。
+> 想看到真座舱与真人学员，把它们拷进来再重新生成场景：
+>
+> ```powershell
+> New-Item -ItemType Directory -Force -Path 'unity\Assets\Models\AI\sister','unity\Assets\Models\AI\interior' | Out-Null
+> Copy-Item 'F:\妹妹.fbx'  'unity\Assets\Models\AI\sister\sister.fbx'     -Force
+> Copy-Item 'F:\内饰.fbx'  'unity\Assets\Models\AI\interior\interior.fbx' -Force
+> powershell -ExecutionPolicy Bypass -File tools\unity_batch.ps1 -Method Copilot.EditorTools.SceneBuilder.BuildAndExit
+> ```
+>
+> ⚠️ **目录层级不能改**：FBX 内部按相对路径 `output.fbm/xxx.png` 找贴图，只有放在同名子目录下、贴图抽到旁边的
+> `output.fbm`，Unity 才挂得上（否则是一身白模）。**贴图抽取由建场景时的 `EnsureModelTextures` 自动做**，
+> 不用额外跑一步。
+> 没放这两个文件的机器，场景生成会**自动退回灰盒学员/仪表台**（能玩，但不好看）。
+> 想先看清模型是什么、朝向哪边：跑 `ModelProbe.RunAndExit`（出 `logs\model_probe.txt`）与
+> `ModelShowcase.ShowAndExit`（出 `logs\model_{sister,interior}_*.png`，每模型三个方向各一张）。
 
 ## 事件流（与 `copilot.proto` 对应）
 

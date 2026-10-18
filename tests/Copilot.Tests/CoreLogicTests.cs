@@ -1,5 +1,6 @@
 using System.Linq;
 using Copilot.Core;
+using Copilot.Core.Dialogue;
 using Copilot.Core.Levels;
 using Copilot.Core.Llm;
 using Xunit;
@@ -741,5 +742,72 @@ public class TutorialProgressTests
         Assert.Equal("科目一", LevelCatalog.All[0].Subject);
         Assert.Equal("科目四", LevelCatalog.All[3].Subject);
         Assert.NotEmpty(LevelCatalog.Subject1Tutorial.Steps);
+    }
+}
+
+/// <summary>
+/// 话题度（用户反馈：「太多强调玩家回归到开车中」）：
+/// 闲聊**不每轮都拉回**，攒够 <see cref="DialogueMemory.OffTopicTolerance"/> 轮才提醒一次；
+/// 中间插一句驾驶指令，耐心重新充满。
+/// </summary>
+public class TopicToleranceTests
+{
+    [Fact]
+    public void 连续闲聊累加_驾驶意图清零()
+    {
+        var memory = new DialogueMemory();
+        memory.NoteIntent(Intents.QuestionBack);
+        memory.NoteIntent(Intents.QuestionBack);
+        Assert.Equal(2, memory.OffTopicStreak);
+
+        memory.NoteIntent(Intents.TurnLeft);
+        Assert.Equal(0, memory.OffTopicStreak);
+
+        // 「危险指令被拦」也算驾驶相关（IGNORE 不该把闲聊计数继续攒着）
+        memory.NoteIntent(Intents.QuestionBack);
+        memory.NoteIntent(Intents.Ignore);
+        Assert.Equal(0, memory.OffTopicStreak);
+    }
+
+    [Fact]
+    public void 没到阈值时_提示里明确要求不要提回去练车()
+    {
+        var memory = new DialogueMemory();
+        memory.NoteIntent(Intents.QuestionBack);
+
+        var block = memory.BuildContextBlock();
+        Assert.Contains("不要提", block);
+        Assert.DoesNotContain("带回练车", block);
+        Assert.Contains("第 1 轮", block);
+    }
+
+    [Fact]
+    public void 到了第三轮才提醒该收一收()
+    {
+        var memory = new DialogueMemory();
+        for (int i = 0; i < DialogueMemory.OffTopicTolerance; i++) memory.NoteIntent(Intents.QuestionBack);
+
+        var block = memory.BuildContextBlock();
+        // 提示**又短又直白**（三轮实测换来的措辞，见 DialogueMemory.BuildContextBlock 的注释）：
+        // 长解释句会让 7B 退化（输出连 reply 都写不完），只给关键词又收不回来。
+        Assert.Contains("末尾带一句回练车的话", block);
+        Assert.True(block.Length < 60, $"话题提示太长（{block.Length} 字），实测会让 7B 退化");
+    }
+
+    [Fact]
+    public void 清空记忆时跑题计数也归零()
+    {
+        var memory = new DialogueMemory();
+        memory.NoteIntent(Intents.QuestionBack);
+        memory.Clear();
+        Assert.Equal(0, memory.OffTopicStreak);
+    }
+
+    [Fact]
+    public void 提示词里不再要求每轮都把话题拉回开车()
+    {
+        // 这条是这次修复的核心：以前规则4 写着「聊完必须把话题拉回开车」—— 每轮都拉最像机器人。
+        Assert.Contains("别急着把话题拽回开车", PromptBuilder.Rules);
+        Assert.DoesNotContain("聊完必须把话题拉回开车", PromptBuilder.Rules);
     }
 }
